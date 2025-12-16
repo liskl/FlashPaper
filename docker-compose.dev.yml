@@ -1,0 +1,113 @@
+# FlashPaper Docker Compose - Development Configuration
+#
+# This compose file sets up a development environment with:
+# - Hot reload using Air (automatically rebuilds on code changes)
+# - SQLite for simple local development
+# - Source code mounted from host
+# - Debug ports exposed
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up     # Start with logs
+#   docker-compose -f docker-compose.dev.yml up -d  # Start detached
+#   docker-compose -f docker-compose.dev.yml down   # Stop
+#
+# Requirements:
+#   - Air must be installed: go install github.com/air-verse/air@latest
+#   - Or use the provided Dockerfile.dev
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # FlashPaper Development Container
+  # ==========================================================================
+  flashpaper:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: flashpaper-dev
+    ports:
+      # Application port
+      - "8080:8080"
+      # Delve debugger port (optional)
+      - "2345:2345"
+    environment:
+      # Development settings
+      - FLASHPAPER_MAIN_NAME=FlashPaper (Dev)
+      - FLASHPAPER_MAIN_BASEPATH=/
+      - FLASHPAPER_MAIN_DISCUSSION=true
+
+      # SQLite for simple local development
+      - FLASHPAPER_MODEL_CLASS=Database
+      - FLASHPAPER_MODEL_DSN=/data/flashpaper.db
+
+      # Disable rate limiting in development
+      - FLASHPAPER_TRAFFIC_LIMIT=0
+
+      # Go environment for development
+      - CGO_ENABLED=1
+      - GO111MODULE=on
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Cache Go modules and build cache
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      # Persistent data directory
+      - dev-data:/data
+    working_dir: /app
+    command: ["air", "-c", ".air.toml"]
+    networks:
+      - flashpaper-dev-net
+
+  # ==========================================================================
+  # PostgreSQL for testing production-like setup (optional)
+  # ==========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: flashpaper-dev-db
+    profiles:
+      - postgres  # Only starts with: docker-compose -f docker-compose.dev.yml --profile postgres up
+    environment:
+      - POSTGRES_DB=flashpaper
+      - POSTGRES_USER=flashpaper
+      - POSTGRES_PASSWORD=devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    networks:
+      - flashpaper-dev-net
+
+  # ==========================================================================
+  # Adminer - Database management UI (optional)
+  # ==========================================================================
+  adminer:
+    image: adminer:latest
+    container_name: flashpaper-adminer
+    profiles:
+      - tools  # Only starts with: docker-compose -f docker-compose.dev.yml --profile tools up
+    ports:
+      - "8081:8080"
+    networks:
+      - flashpaper-dev-net
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  go-mod-cache:
+    driver: local
+  go-build-cache:
+    driver: local
+  dev-data:
+    driver: local
+  dev-db-data:
+    driver: local
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  flashpaper-dev-net:
+    driver: bridge

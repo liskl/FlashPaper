@@ -1,0 +1,96 @@
+# FlashPaper Docker Compose - Production Configuration
+#
+# This compose file sets up FlashPaper with PostgreSQL as the backend.
+# PostgreSQL is recommended for production due to better performance
+# and concurrent access handling.
+#
+# Usage:
+#   docker-compose up -d          # Start services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop services
+#   docker-compose down -v        # Stop and remove volumes (deletes all data!)
+#
+# Configuration:
+#   1. Copy secrets/db_password.txt.example to secrets/db_password.txt
+#   2. Set a strong password in secrets/db_password.txt
+#   3. Optionally customize environment variables below
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # FlashPaper Application
+  # ==========================================================================
+  flashpaper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flashpaper:latest
+    container_name: flashpaper
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Application settings
+      - FLASHPAPER_MAIN_NAME=FlashPaper
+      - FLASHPAPER_MAIN_BASEPATH=/
+      - FLASHPAPER_MAIN_DISCUSSION=true
+      - FLASHPAPER_MAIN_BURNAFTERREADINGSELECTED=false
+
+      # Database settings - PostgreSQL
+      - FLASHPAPER_MODEL_CLASS=Database
+      - FLASHPAPER_MODEL_DSN=postgres://flashpaper:${DB_PASSWORD:-changeme}@db:5432/flashpaper?sslmode=disable
+
+      # Traffic/rate limiting
+      - FLASHPAPER_TRAFFIC_LIMIT=10
+
+      # Purge settings (cleanup expired pastes)
+      - FLASHPAPER_PURGE_LIMIT=300
+      - FLASHPAPER_PURGE_BATCHSIZE=10
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - flashpaper-net
+
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: flashpaper-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=flashpaper
+      - POSTGRES_USER=flashpaper
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashpaper -d flashpaper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - flashpaper-net
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  db_data:
+    driver: local
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  flashpaper-net:
+    driver: bridge

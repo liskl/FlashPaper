@@ -1,0 +1,49 @@
+# Air configuration for FlashPaper hot reload
+# See: https://github.com/air-verse/air
+#
+# This file configures Air to watch for file changes and automatically
+# rebuild and restart the application during development.
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Build command - CGO required for SQLite
+cmd = "CGO_ENABLED=1 go build -o ./tmp/flashpaper ./cmd/flashpaper/"
+# Binary to run after build
+bin = "./tmp/flashpaper"
+# Watch these file extensions
+include_ext = ["go", "tpl", "tmpl", "html", "css", "js"]
+# Exclude these directories from watching
+exclude_dir = ["assets", "tmp", "vendor", "node_modules", ".git"]
+# Include these directories in watch
+include_dir = []
+# Exclude files matching these patterns
+exclude_file = []
+# Exclude unchanged files
+exclude_unchanged = true
+# Follow symlinks
+follow_symlink = true
+# Delay before running build after change detected (ms)
+delay = 500
+# Stop running old binary when new build starts
+stop_on_error = true
+# Send interrupt signal to stop running binary (INT, TERM, KILL)
+kill_delay = 500
+
+[log]
+# Show log time
+time = true
+# Only show main logs (errors, build status)
+main_only = false
+
+[color]
+# Customize terminal colors
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+# Delete tmp directory on exit
+clean_on_exit = true

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{.Name}}</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+                <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
+                <span class="theme-toggle-text" id="theme-text">Dark</span>
+            </button>
+            <h1><a href="/">{{.Name}}</a></h1>
+            <p class="tagline">Zero-knowledge encrypted pastebin</p>
+        </header>
+
+        <!-- Alert messages -->
+        <div id="alert" class="alert hidden"></div>
+
+        <!-- Main content area -->
+        <main>
+            <!-- New paste form (shown when no paste ID) -->
+            <div id="new-paste" class="panel">
+                <div class="toolbar">
+                    <div class="toolbar-group">
+                        <label for="expire">Expires:</label>
+                        <select id="expire">
+                            <option value="5min">5 minutes</option>
+                            <option value="10min">10 minutes</option>
+                            <option value="1hour">1 hour</option>
+                            <option value="1day">1 day</option>
+                            <option value="1week" selected>1 week</option>
+                            <option value="1month">1 month</option>
+                            <option value="1year">1 year</option>
+                            <option value="never">Never</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-group">
+                        <label>
+                            <input type="checkbox" id="burn-after-reading">
+                            Burn after reading
+                        </label>
+                    </div>
+                    <div class="toolbar-group">
+                        <label>
+                            <input type="checkbox" id="open-discussion">
+                            Open discussion
+                        </label>
+                    </div>
+                    <div class="toolbar-group">
+                        <label for="password">Password (optional):</label>
+                        <input type="password" id="password" placeholder="Optional password">
+                    </div>
+                </div>
+
+                <textarea id="paste-content" placeholder="Paste your text here..." autofocus></textarea>
+
+                <div class="actions">
+                    <button id="create-paste" class="btn btn-primary">Create Paste</button>
+                </div>
+            </div>
+
+            <!-- View paste (shown when viewing a paste) -->
+            <div id="view-paste" class="panel hidden">
+                <div class="paste-info">
+                    <span id="paste-date"></span>
+                    <span id="paste-status"></span>
+                </div>
+
+                <!-- Password prompt for encrypted pastes -->
+                <div id="password-prompt" class="hidden">
+                    <p>This paste is password protected.</p>
+                    <input type="password" id="decrypt-password" placeholder="Enter password">
+                    <button id="decrypt-btn" class="btn btn-primary">Decrypt</button>
+                </div>
+
+                <!-- Decrypted content -->
+                <div id="paste-output" class="hidden">
+                    <pre id="paste-text"></pre>
+                </div>
+
+                <!-- Burn after reading warning -->
+                <div id="burn-warning" class="alert alert-warning hidden">
+                    <strong>Warning:</strong> This paste will be deleted after you view it.
+                    <button id="view-burn" class="btn btn-warning">View paste</button>
+                </div>
+
+                <div class="actions">
+                    <button id="clone-paste" class="btn">Clone</button>
+                    <button id="raw-paste" class="btn">Raw</button>
+                    <button id="delete-paste" class="btn btn-danger hidden">Delete</button>
+                    <a id="paste-url" class="btn" href="#">Copy URL</a>
+                </div>
+
+                <!-- Discussion/comments section -->
+                <div id="discussion" class="hidden">
+                    <h3>Discussion</h3>
+                    <div id="comments"></div>
+                    <div id="new-comment">
+                        <textarea id="comment-content" placeholder="Add a comment..."></textarea>
+                        <button id="add-comment" class="btn">Add Comment</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                <a href="https://github.com/liskl/flashpaper" target="_blank">FlashPaper</a> -
+                A Go implementation of <a href="https://privatebin.info/" target="_blank">PrivateBin</a>
+            </p>
+            <p class="security-note">
+                All data is encrypted in your browser. The server never sees your content.
+            </p>
+        </footer>
+    </div>
+
+    <script src="/js/flashpaper.js"></script>
+    <script>
+        // Initialize FlashPaper when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            FlashPaper.init();
+        });
+    </script>
+</body>
+</html>
