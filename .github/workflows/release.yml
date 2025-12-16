@@ -63,5 +63,5 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token $GITHUB_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker.yml/dispatches \
-            -d '{"ref":"main","inputs":{"ref":"v${{ steps.semantic.outputs.new_version }}"}}'
+            -d '{"ref":"v${{ steps.semantic.outputs.new_version }}"}'
           echo "Triggered Docker build for v${{ steps.semantic.outputs.new_version }}"
