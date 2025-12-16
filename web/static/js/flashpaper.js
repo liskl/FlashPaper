@@ -757,7 +757,7 @@ const FlashPaper = (function() {
     }
 
     /**
-     * Encrypt a comment (similar to paste but simpler adata)
+     * Encrypt a comment (uses same nested adata format as pastes for compatibility)
      */
     async function encryptComment(plaintext, key, password) {
         const iv = getRandomBytes(16);
@@ -765,7 +765,9 @@ const FlashPaper = (function() {
 
         const derivedKey = await deriveKey(key, password, salt);
 
-        const adata = [
+        // Use nested adata format to match paste encryption structure
+        // Format: [[iv, salt, iterations, keysize, tagsize, algo, mode, compression], format, opendiscussion, burnafterreading]
+        const spec = [
             arrayBufferToBase64(iv),
             arrayBufferToBase64(salt),
             ITERATIONS,
@@ -773,8 +775,9 @@ const FlashPaper = (function() {
             TAG_SIZE,
             ALGORITHM,
             MODE,
-            'none'
+            'none'  // no compression for comments
         ];
+        const adata = [spec, 'plaintext', 0, 0];
 
         const ciphertext = await crypto.subtle.encrypt(
             {
