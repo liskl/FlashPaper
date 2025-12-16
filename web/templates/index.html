@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{.Name}}</title>
+    <!-- Critical CSS inlined for faster initial render -->
+    <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg-primary:#f5f7fa;--bg-secondary:#ffffff;--bg-tertiary:#e9ecef;--text-primary:#212529;--text-secondary:#495057;--text-muted:#6c757d;--accent-primary:#e94560;--accent-secondary:#0f3460;--border-color:#dee2e6;--success:#28a745;--warning:#ffc107;--danger:#dc3545;--info:#17a2b8;--shadow:rgba(0,0,0,0.1);--spacing-xs:0.25rem;--spacing-sm:0.5rem;--spacing-md:1rem;--spacing-lg:1.5rem;--spacing-xl:2rem;--radius-sm:4px;--radius-md:8px;--radius-lg:12px;--transition-fast:0.15s ease;--transition-normal:0.3s ease}
+    [data-theme="dark"]{--bg-primary:#121212;--bg-secondary:#1e1e1e;--bg-tertiary:#2d2d2d;--text-primary:#e0e0e0;--text-secondary:#a0a0a0;--text-muted:#707070;--accent-primary:#808080;--accent-secondary:#505050;--border-color:#3d3d3d;--shadow:rgba(0,0,0,0.4)}
+    html{font-size:16px;line-height:1.5}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:var(--bg-primary);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;transition:background-color var(--transition-normal),color var(--transition-normal)}
+    .container{max-width:900px;width:100%;margin:0 auto;padding:var(--spacing-md);flex:1;display:flex;flex-direction:column}
+    header{padding:var(--spacing-lg) 0;border-bottom:1px solid var(--border-color);margin-bottom:var(--spacing-lg)}
+    .header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--spacing-xs)}
+    header h1{font-size:1.5rem;font-weight:700;margin:0}
+    header h1 a{color:var(--accent-primary);text-decoration:none}
+    .header-actions{display:flex;align-items:center;gap:var(--spacing-sm)}
+    .tagline{color:var(--text-secondary);font-size:0.875rem;margin:0}
+    .btn{display:inline-flex;align-items:center;justify-content:center;padding:var(--spacing-sm) var(--spacing-md);font-size:0.875rem;font-weight:500;text-decoration:none;border:1px solid var(--border-color);border-radius:var(--radius-sm);background-color:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;transition:all var(--transition-fast)}
+    .btn-sm{padding:var(--spacing-xs) var(--spacing-sm);font-size:0.8125rem}
+    .btn-primary{background-color:var(--accent-primary);border-color:var(--accent-primary);color:white}
+    main{flex:1}
+    .panel{background-color:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:var(--spacing-lg);margin-bottom:var(--spacing-lg);box-shadow:0 2px 4px var(--shadow)}
+    .toolbar{padding-bottom:var(--spacing-md);border-bottom:1px solid var(--border-color);margin-bottom:var(--spacing-md)}
+    .toolbar-row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--spacing-md)}
+    .toolbar-group{display:flex;align-items:center;gap:var(--spacing-xs)}
+    .toolbar-group>label{color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap}
+    .checkbox-label{display:flex;align-items:center;gap:var(--spacing-xs);cursor:pointer;color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap}
+    .toolbar-password{margin-left:auto}
+    .toolbar-password input{width:120px}
+    .toolbar-send{margin-left:var(--spacing-sm)}
+    select,input[type="text"],input[type="password"]{background-color:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:var(--spacing-xs) var(--spacing-sm);font-size:0.8125rem}
+    input[type="checkbox"]{width:0.875rem;height:0.875rem;accent-color:var(--accent-primary);cursor:pointer}
+    textarea{width:100%;min-height:300px;background-color:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:var(--spacing-md);font-family:'Monaco','Menlo','Ubuntu Mono','Consolas',monospace;font-size:0.875rem;line-height:1.6;resize:vertical}
+    textarea::placeholder{color:var(--text-muted)}
+    .hidden{display:none!important}
+    .alert{padding:var(--spacing-md);border-radius:var(--radius-sm);margin-bottom:var(--spacing-md);border:1px solid}
+    footer{text-align:center;padding:var(--spacing-xl) 0;border-top:1px solid var(--border-color);margin-top:var(--spacing-xl);color:var(--text-secondary);font-size:0.875rem}
+    footer a{color:var(--accent-primary);text-decoration:none}
+    .security-note{margin-top:var(--spacing-sm);color:var(--text-muted);font-size:0.75rem}
+    </style>
+    <!-- Load full stylesheet asynchronously -->
+    <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <h1><a href="/">{{.Name}}</a></h1>
+                <div class="header-actions">
+                    <a href="/" class="btn btn-sm" id="new-paste-btn">New</a>
+                    <button id="theme-toggle" class="btn btn-sm" aria-label="Toggle dark mode">
+                        <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
+                        <span class="theme-toggle-text" id="theme-text">Dark</span>
+                    </button>
+                </div>
+            </div>
+            <p class="tagline">Zero-knowledge encrypted pastebin</p>
+        </header>
+
+        <!-- Alert messages -->
+        <div id="alert" class="alert hidden"></div>
+
+        <!-- Main content area -->
+        <main>
+            <!-- New paste form (shown when no paste ID) -->
+            <div id="new-paste" class="panel">
+                <div class="toolbar">
+                    <div class="toolbar-row">
+                        <div class="toolbar-group">
+                            <label for="expire">Expires</label>
+                            <select id="expire">
+                                <option value="5min">5 min</option>
+                                <option value="10min">10 min</option>
+                                <option value="1hour">1 hour</option>
+                                <option value="1day">1 day</option>
+                                <option value="1week" selected>1 week</option>
+                                <option value="1month">1 month</option>
+                                <option value="1year">1 year</option>
+                                <option value="never">Never</option>
+                            </select>
+                        </div>
+                        <div class="toolbar-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="burn-after-reading">
+                                <span>Burn after reading</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="open-discussion">
+                                <span>Open discussion</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-group toolbar-password">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" placeholder="(optional)">
+                        </div>
+                        <div class="toolbar-group toolbar-send">
+                            <button id="create-paste" class="btn btn-primary">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <textarea id="paste-content" placeholder="Enter your text here..." autofocus></textarea>
+            </div>
+
+            <!-- View paste (shown when viewing a paste) -->
+            <div id="view-paste" class="panel hidden">
+                <!-- Action toolbar for viewing paste -->
+                <div class="toolbar">
+                    <div class="toolbar-row">
+                        <div class="toolbar-group paste-meta">
+                            <span id="paste-date"></span>
+                            <span id="paste-status"></span>
+                        </div>
+                        <div class="toolbar-group toolbar-actions">
+                            <button id="clone-paste" class="btn btn-sm">Clone</button>
+                            <button id="raw-paste" class="btn btn-sm">Raw</button>
+                            <button id="paste-url" class="btn btn-sm">Copy URL</button>
+                            <button id="delete-paste" class="btn btn-sm btn-danger hidden">Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password prompt for encrypted pastes -->
+                <div id="password-prompt" class="hidden">
+                    <p>This paste is password protected.</p>
+                    <div class="password-form">
+                        <input type="password" id="decrypt-password" placeholder="Enter password">
+                        <button id="decrypt-btn" class="btn btn-primary">Decrypt</button>
+                    </div>
+                </div>
+
+                <!-- Decrypted content -->
+                <div id="paste-output" class="hidden">
+                    <pre id="paste-text"></pre>
+                </div>
+
+                <!-- Burn after reading warning -->
+                <div id="burn-warning" class="alert alert-warning hidden">
+                    <strong>Warning:</strong> This paste will be deleted after you view it.
+                    <button id="view-burn" class="btn btn-warning">View paste</button>
+                </div>
+
+                <!-- Discussion/comments section -->
+                <div id="discussion" class="hidden">
+                    <h3>Discussion</h3>
+                    <div id="comments"></div>
+                    <div id="new-comment">
+                        <textarea id="comment-content" placeholder="Add a comment..."></textarea>
+                        <button id="add-comment" class="btn">Add Comment</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                <a href="https://github.com/liskl/flashpaper" target="_blank">FlashPaper</a> -
+                A Go implementation of <a href="https://privatebin.info/" target="_blank">PrivateBin</a>
+                | <a href="/implementation">How It Works</a>
+                | <a href="/docs">Documentation</a>
+            </p>
+            <p class="security-note">
+                All data is encrypted in your browser. The server never sees your content.
+            </p>
+        </footer>
+    </div>
+
+    <script src="/js/flashpaper.js" defer></script>
+    <script>
+        // Initialize FlashPaper when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            FlashPaper.init();
+        });
+    </script>
+</body>
+</html>

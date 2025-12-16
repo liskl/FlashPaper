@@ -1,0 +1,28 @@
+# Binary (only in root, not cmd/flashpaper/)
+/flashpaper
+
+# Database files
+*.db
+data/
+
+# Coverage reports
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (may contain secrets)
+config.ini
+
+# Temporary files
+tmp/
+*.tmp
+*.log
