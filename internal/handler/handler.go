@@ -95,8 +95,9 @@ func (h *Handler) Routes() chi.Router {
 	// Health check endpoint
 	r.Get("/health", h.healthCheck)
 
-	// Implementation documentation page
+	// Documentation pages
 	r.Get("/implementation", h.serveImplementation)
+	r.Get("/docs", h.serveDocs)
 
 	// Main paste operations
 	// PrivateBin uses query string for paste ID: /?pasteID
@@ -257,6 +258,30 @@ func (h *Handler) serveImplementation(w http.ResponseWriter, r *http.Request) {
 
 	// Fallback if template fails
 	http.Error(w, "Implementation documentation not available", http.StatusInternalServerError)
+}
+
+// serveDocs serves the documentation hub page.
+func (h *Handler) serveDocs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// Prepare template data
+	data := TemplateData{
+		Name:        h.config.Main.Name,
+		BasePath:    h.config.Main.BasePath,
+		Version:     "1.0.0",
+		Discussion:  h.config.Main.Discussion,
+		BurnEnabled: h.config.Main.BurnAfterReadingSelected,
+	}
+
+	// Try to execute template
+	if h.template != nil {
+		if err := h.template.ExecuteTemplate(w, "docs.html", data); err == nil {
+			return
+		}
+	}
+
+	// Fallback if template fails
+	http.Error(w, "Documentation not available", http.StatusInternalServerError)
 }
 
 // jsonError sends a JSON error response matching PrivateBin format.

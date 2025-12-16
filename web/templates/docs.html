@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{.Name}} - Documentation</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .docs-content {
+            line-height: 1.7;
+        }
+        .docs-content h2 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        .docs-content h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+        .docs-content h4 {
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        .docs-content p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+        .docs-content ul, .docs-content ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+        .docs-content li {
+            margin-bottom: 0.5rem;
+        }
+        .docs-content code {
+            background-color: var(--bg-tertiary);
+            padding: 0.125rem 0.375rem;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            font-size: 0.875em;
+        }
+        .docs-content pre {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .docs-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .doc-nav {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .doc-card {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-decoration: none;
+            transition: all var(--transition-fast);
+        }
+        .doc-card:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+        .doc-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: var(--accent-primary);
+            font-size: 1.1rem;
+        }
+        .doc-card p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .endpoint {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .endpoint-method {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 0.8125rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .method-get { background-color: #61affe; color: white; }
+        .method-post { background-color: #49cc90; color: white; }
+        .method-put { background-color: #fca130; color: white; }
+        .method-delete { background-color: #f93e3e; color: white; }
+        .endpoint-path {
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+        .endpoint-body {
+            padding: 1rem;
+        }
+        .endpoint-body p {
+            margin-bottom: 0.75rem;
+        }
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.75rem 0;
+            font-size: 0.875rem;
+        }
+        .param-table th, .param-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+        }
+        .param-table th {
+            background-color: var(--bg-secondary);
+            font-weight: 600;
+        }
+        .param-name {
+            font-family: monospace;
+            color: var(--accent-primary);
+        }
+        .param-type {
+            font-family: monospace;
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+        .param-required {
+            color: var(--danger);
+            font-size: 0.75rem;
+        }
+        .note {
+            background-color: rgba(23, 162, 184, 0.1);
+            border-left: 4px solid var(--info);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .warning {
+            background-color: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .config-section {
+            margin-bottom: 1.5rem;
+        }
+        .env-var {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 0.75rem;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+        }
+        .env-var code {
+            white-space: nowrap;
+            min-width: 280px;
+        }
+        .env-var span {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .toc {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .toc h4 {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+        }
+        .toc ul {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+        .toc a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 768px) {
+            .env-var {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+            .env-var code {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <h1><a href="/">{{.Name}}</a></h1>
+                <div class="header-actions">
+                    <a href="/" class="btn btn-sm">New Paste</a>
+                    <button id="theme-toggle" class="btn btn-sm" aria-label="Toggle dark mode">
+                        <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
+                        <span class="theme-toggle-text" id="theme-text">Dark</span>
+                    </button>
+                </div>
+            </div>
+            <p class="tagline">Documentation</p>
+        </header>
+
+        <main>
+            <div class="panel docs-content">
+                <h2>Documentation</h2>
+                <p>
+                    Welcome to the FlashPaper documentation. Select a topic below or scroll down
+                    for comprehensive reference material.
+                </p>
+
+                <nav class="doc-nav">
+                    <a href="#installation" class="doc-card">
+                        <h3>Installation</h3>
+                        <p>Deploy FlashPaper using Docker, binary releases, or build from source.</p>
+                    </a>
+                    <a href="#configuration" class="doc-card">
+                        <h3>Configuration</h3>
+                        <p>Configure storage backends, expiration policies, and security settings.</p>
+                    </a>
+                    <a href="#api" class="doc-card">
+                        <h3>API Reference</h3>
+                        <p>RESTful API documentation for programmatic paste management.</p>
+                    </a>
+                    <a href="/implementation" class="doc-card">
+                        <h3>Implementation Details</h3>
+                        <p>Technical deep-dive into cryptographic protocols and architecture.</p>
+                    </a>
+                </nav>
+
+                <nav class="toc">
+                    <h4>Table of Contents</h4>
+                    <ul>
+                        <li><a href="#installation">1. Installation</a></li>
+                        <li><a href="#configuration">2. Configuration</a></li>
+                        <li><a href="#api">3. API Reference</a></li>
+                        <li><a href="#client-integration">4. Client Integration</a></li>
+                        <li><a href="#troubleshooting">5. Troubleshooting</a></li>
+                    </ul>
+                </nav>
+
+                <!-- Installation Section -->
+                <h2 id="installation">1. Installation</h2>
+
+                <h3>1.1 Docker (Recommended)</h3>
+                <p>The simplest way to deploy FlashPaper is using Docker Compose:</p>
+                <pre><code># Clone the repository
+git clone https://github.com/liskl/flashpaper.git
+cd flashpaper
+
+# Start with PostgreSQL backend
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Access the application
+open http://localhost:8080</code></pre>
+
+                <h3>1.2 Docker with SQLite</h3>
+                <p>For simpler deployments without an external database:</p>
+                <pre><code>docker run -d \
+  --name flashpaper \
+  -p 8080:8080 \
+  -v flashpaper-data:/data \
+  -e FLASHPAPER_MODEL_CLASS=Database \
+  -e FLASHPAPER_MODEL_DRIVER=sqlite3 \
+  -e FLASHPAPER_MODEL_DSN=/data/flashpaper.db \
+  flashpaper:latest</code></pre>
+
+                <h3>1.3 Build from Source</h3>
+                <p>Requires Go 1.21+ and CGO for SQLite support:</p>
+                <pre><code># Clone and build
+git clone https://github.com/liskl/flashpaper.git
+cd flashpaper
+CGO_ENABLED=1 go build -o flashpaper ./cmd/flashpaper
+
+# Run with default configuration
+./flashpaper
+
+# Run with custom config file
+./flashpaper -config /path/to/config.ini</code></pre>
+
+                <h3>1.4 System Requirements</h3>
+                <ul>
+                    <li><strong>Memory:</strong> 64MB minimum, 128MB recommended</li>
+                    <li><strong>Storage:</strong> Depends on usage; ~1KB per paste average</li>
+                    <li><strong>CPU:</strong> Any modern processor; single core sufficient for most deployments</li>
+                    <li><strong>Network:</strong> HTTPS termination recommended (via reverse proxy)</li>
+                </ul>
+
+                <!-- Configuration Section -->
+                <h2 id="configuration">2. Configuration</h2>
+
+                <p>
+                    FlashPaper can be configured via INI file or environment variables.
+                    Environment variables override file settings and use the format:
+                    <code>FLASHPAPER_SECTION_KEY</code>
+                </p>
+
+                <h3>2.1 Core Settings</h3>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_NAME</code>
+                        <span>Application name displayed in the UI (default: "FlashPaper")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_HOST</code>
+                        <span>Bind address (default: "0.0.0.0")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_PORT</code>
+                        <span>HTTP port (default: 8080)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_BASEPATH</code>
+                        <span>URL base path for reverse proxy setups (default: "/")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_DISCUSSION</code>
+                        <span>Enable discussion/comments feature (default: true)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MAIN_SIZELIMIT</code>
+                        <span>Maximum paste size in bytes (default: 10485760 / 10MB)</span>
+                    </div>
+                </div>
+
+                <h3>2.2 Storage Backend</h3>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>FLASHPAPER_MODEL_CLASS</code>
+                        <span>Storage type: "Database" or "Filesystem" (default: "Database")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MODEL_DRIVER</code>
+                        <span>Database driver: "sqlite3", "postgres", or "mysql"</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MODEL_DSN</code>
+                        <span>Database connection string (see examples below)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_MODEL_DIR</code>
+                        <span>Directory for filesystem storage (when using Filesystem class)</span>
+                    </div>
+                </div>
+
+                <h4>DSN Examples</h4>
+                <pre><code># SQLite
+FLASHPAPER_MODEL_DSN=/data/flashpaper.db
+
+# PostgreSQL
+FLASHPAPER_MODEL_DSN=postgres://user:password@localhost:5432/flashpaper?sslmode=disable
+
+# MySQL
+FLASHPAPER_MODEL_DSN=user:password@tcp(localhost:3306)/flashpaper?charset=utf8mb4</code></pre>
+
+                <h3>2.3 Expiration Settings</h3>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>FLASHPAPER_EXPIRE_DEFAULT</code>
+                        <span>Default expiration option (default: "1week")</span>
+                    </div>
+                </div>
+                <p>Available expiration options: <code>5min</code>, <code>10min</code>, <code>1hour</code>, <code>1day</code>, <code>1week</code>, <code>1month</code>, <code>1year</code>, <code>never</code></p>
+
+                <h3>2.4 Rate Limiting</h3>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>FLASHPAPER_TRAFFIC_LIMIT</code>
+                        <span>Minimum seconds between paste creations per IP (default: 10, 0 to disable)</span>
+                    </div>
+                </div>
+
+                <h3>2.5 INI File Example</h3>
+                <pre><code>[main]
+name = "FlashPaper"
+host = "0.0.0.0"
+port = 8080
+basepath = "/"
+discussion = true
+sizelimit = 10485760
+
+[model]
+class = "Database"
+driver = "postgres"
+dsn = "postgres://flashpaper:password@db:5432/flashpaper?sslmode=disable"
+
+[expire]
+default = "1week"
+
+[traffic]
+limit = 10
+
+[purge]
+limit = 300
+batchsize = 10</code></pre>
+
+                <!-- API Reference Section -->
+                <h2 id="api">3. API Reference</h2>
+
+                <p>
+                    FlashPaper implements a PrivateBin-compatible REST API. All responses use JSON format
+                    with a <code>status</code> field (0 = success, 1 = error).
+                </p>
+
+                <h3>3.1 Create Paste</h3>
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="endpoint-method method-post">POST</span>
+                        <span class="endpoint-path">/</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p>Create a new encrypted paste.</p>
+
+                        <h4>Request Headers</h4>
+                        <table class="param-table">
+                            <tr>
+                                <th>Header</th>
+                                <th>Value</th>
+                                <th>Required</th>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">Content-Type</span></td>
+                                <td><code>application/json</code></td>
+                                <td><span class="param-required">Yes</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">X-Requested-With</span></td>
+                                <td><code>JSONHttpRequest</code></td>
+                                <td>Recommended</td>
+                            </tr>
+                        </table>
+
+                        <h4>Request Body</h4>
+                        <table class="param-table">
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">v</span></td>
+                                <td><span class="param-type">integer</span></td>
+                                <td>API version (always 2)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">ct</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Base64-encoded ciphertext</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">adata</span></td>
+                                <td><span class="param-type">array</span></td>
+                                <td>Authenticated data array (encryption params)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">meta.expire</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Expiration option (e.g., "1week")</td>
+                            </tr>
+                        </table>
+
+                        <h4>Example Request</h4>
+                        <pre><code>{
+  "v": 2,
+  "ct": "base64_encoded_ciphertext",
+  "adata": [
+    ["IV_base64", "salt_base64", 100000, 256, 128, "aes", "gcm", "none"],
+    "plaintext",
+    0,
+    0
+  ],
+  "meta": {
+    "expire": "1week"
+  }
+}</code></pre>
+
+                        <h4>Example Response</h4>
+                        <pre><code>{
+  "status": 0,
+  "id": "f468483c313401e8",
+  "url": "/?f468483c313401e8",
+  "deletetoken": "a1b2c3d4e5f6..."
+}</code></pre>
+                    </div>
+                </div>
+
+                <h3>3.2 Retrieve Paste</h3>
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="endpoint-method method-get">GET</span>
+                        <span class="endpoint-path">/?{pasteId}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p>Retrieve an encrypted paste by ID.</p>
+
+                        <h4>Request Headers</h4>
+                        <table class="param-table">
+                            <tr>
+                                <th>Header</th>
+                                <th>Value</th>
+                                <th>Required</th>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">X-Requested-With</span></td>
+                                <td><code>JSONHttpRequest</code></td>
+                                <td><span class="param-required">Yes</span> (for JSON response)</td>
+                            </tr>
+                        </table>
+
+                        <h4>Example Response</h4>
+                        <pre><code>{
+  "status": 0,
+  "id": "f468483c313401e8",
+  "url": "/?f468483c313401e8",
+  "v": 2,
+  "ct": "base64_encoded_ciphertext",
+  "adata": [...],
+  "meta": {
+    "postdate": 1703001234,
+    "opendiscussion": false
+  },
+  "comments": []
+}</code></pre>
+                    </div>
+                </div>
+
+                <h3>3.3 Delete Paste</h3>
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="endpoint-method method-delete">DELETE</span>
+                        <span class="endpoint-path">/</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p>Delete a paste using its delete token.</p>
+
+                        <h4>Request Body</h4>
+                        <table class="param-table">
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">pasteid</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>16-character paste ID</td>
+                            </tr>
+                            <tr>
+                                <td><span class="param-name">deletetoken</span></td>
+                                <td><span class="param-type">string</span></td>
+                                <td>Delete token from paste creation</td>
+                            </tr>
+                        </table>
+
+                        <h4>Example Request</h4>
+                        <pre><code>{
+  "pasteid": "f468483c313401e8",
+  "deletetoken": "a1b2c3d4e5f6..."
+}</code></pre>
+
+                        <h4>Example Response</h4>
+                        <pre><code>{
+  "status": 0,
+  "id": "f468483c313401e8"
+}</code></pre>
+                    </div>
+                </div>
+
+                <h3>3.4 Health Check</h3>
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="endpoint-method method-get">GET</span>
+                        <span class="endpoint-path">/health</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p>Returns service health status.</p>
+                        <h4>Example Response</h4>
+                        <pre><code>{"status": "ok"}</code></pre>
+                    </div>
+                </div>
+
+                <h3>3.5 Error Responses</h3>
+                <p>All error responses follow this format:</p>
+                <pre><code>{
+  "status": 1,
+  "message": "Error description"
+}</code></pre>
+
+                <table class="param-table">
+                    <tr>
+                        <th>HTTP Status</th>
+                        <th>Message</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td>400</td>
+                        <td>Invalid JSON</td>
+                        <td>Malformed request body</td>
+                    </tr>
+                    <tr>
+                        <td>404</td>
+                        <td>Paste not found</td>
+                        <td>Paste ID does not exist or has expired</td>
+                    </tr>
+                    <tr>
+                        <td>403</td>
+                        <td>Invalid delete token</td>
+                        <td>Delete token does not match</td>
+                    </tr>
+                    <tr>
+                        <td>429</td>
+                        <td>Rate limit exceeded</td>
+                        <td>Too many requests from this IP</td>
+                    </tr>
+                </table>
+
+                <!-- Client Integration Section -->
+                <h2 id="client-integration">4. Client Integration</h2>
+
+                <h3>4.1 Encryption Requirements</h3>
+                <p>
+                    Clients must implement client-side encryption before sending data to the API.
+                    See the <a href="/implementation">Implementation Details</a> for cryptographic specifications.
+                </p>
+
+                <div class="note">
+                    <strong>Key Point:</strong> The server never receives plaintext data. All encryption
+                    and decryption must occur client-side using the key stored in the URL fragment.
+                </div>
+
+                <h3>4.2 URL Structure</h3>
+                <pre><code>https://example.com/?{pasteId}#{key}
+                    │           │         │
+                    │           │         └── Base58-encoded encryption key (never sent to server)
+                    │           └── 16-character hex paste ID
+                    └── Server origin</code></pre>
+
+                <h3>4.3 AData Structure</h3>
+                <p>The <code>adata</code> array contains encryption parameters and paste settings:</p>
+                <pre><code>[
+  [
+    "IV_base64",      // Initialization vector
+    "salt_base64",    // PBKDF2 salt
+    100000,           // Iteration count
+    256,              // Key size in bits
+    128,              // Authentication tag size
+    "aes",            // Algorithm
+    "gcm",            // Mode
+    "none"            // Compression ("none" or "zlib")
+  ],
+  "plaintext",        // Formatter: "plaintext", "syntaxhighlighting", "markdown"
+  0,                  // Open discussion: 0 or 1
+  0                   // Burn after reading: 0 or 1
+]</code></pre>
+
+                <!-- Troubleshooting Section -->
+                <h2 id="troubleshooting">5. Troubleshooting</h2>
+
+                <h3>5.1 Common Issues</h3>
+
+                <h4>Database Connection Errors</h4>
+                <ul>
+                    <li>Verify the DSN format matches your database driver</li>
+                    <li>Ensure <code>FLASHPAPER_MODEL_DRIVER</code> is set correctly</li>
+                    <li>Check network connectivity to the database server</li>
+                    <li>For PostgreSQL, ensure the database exists and user has permissions</li>
+                </ul>
+
+                <h4>Decryption Failures</h4>
+                <ul>
+                    <li>Ensure the complete URL including fragment (#key) is shared</li>
+                    <li>Verify the paste hasn't expired or been deleted</li>
+                    <li>Check if password protection was enabled (requires correct password)</li>
+                </ul>
+
+                <h4>Container Won't Start</h4>
+                <ul>
+                    <li>Check logs: <code>docker-compose logs flashpaper</code></li>
+                    <li>Verify environment variables are correctly formatted</li>
+                    <li>Ensure the data volume has correct permissions</li>
+                </ul>
+
+                <h3>5.2 Debug Mode</h3>
+                <p>Enable verbose logging by checking container logs:</p>
+                <pre><code>docker-compose logs -f flashpaper</code></pre>
+
+                <h3>5.3 Getting Help</h3>
+                <ul>
+                    <li>GitHub Issues: <a href="https://github.com/liskl/flashpaper/issues" target="_blank">Report bugs or request features</a></li>
+                    <li>Source Code: <a href="https://github.com/liskl/flashpaper" target="_blank">View the source</a></li>
+                </ul>
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                <a href="https://github.com/liskl/flashpaper" target="_blank">FlashPaper</a> -
+                A Go implementation of <a href="https://privatebin.info/" target="_blank">PrivateBin</a>
+                | <a href="/implementation">How It Works</a>
+            </p>
+            <p class="security-note">
+                All data is encrypted in your browser. The server never sees your content.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        (function() {
+            const toggle = document.getElementById('theme-toggle');
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+
+            function setTheme(theme) {
+                if (theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    icon.innerHTML = '&#9728;';
+                    text.textContent = 'Light';
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                    icon.innerHTML = '&#9790;';
+                    text.textContent = 'Dark';
+                }
+                localStorage.setItem('flashpaper-theme', theme);
+            }
+
+            // Initialize theme
+            const saved = localStorage.getItem('flashpaper-theme');
+            if (saved) setTheme(saved);
+
+            toggle.addEventListener('click', function() {
+                const current = document.documentElement.getAttribute('data-theme');
+                setTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        })();
+    </script>
+</body>
+</html>
