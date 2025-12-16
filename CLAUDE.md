@@ -308,3 +308,4 @@ open http://localhost:8080
 - Server salt is base64-encoded and stored in database
 - Rate limiting by IP hash (configurable)
 - Security headers set via middleware (CSP, X-Frame-Options, etc.)
+- always run tests or validate improvements before commiting.
