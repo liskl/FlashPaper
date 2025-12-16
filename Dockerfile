@@ -36,7 +36,7 @@ RUN CGO_ENABLED=1 go build \
 # ============================================================================
 # Stage 2: Create minimal runtime image
 # ============================================================================
-FROM alpine:3.19
+FROM alpine:3.23
 
 # Add labels for container metadata
 LABEL org.opencontainers.image.title="FlashPaper"

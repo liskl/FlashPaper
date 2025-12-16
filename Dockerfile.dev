@@ -6,7 +6,7 @@
 # Usage:
 #   docker-compose -f docker-compose.dev.yml up
 
-FROM golang:1.21-alpine
+FROM golang:1.23-alpine
 
 # Install development dependencies
 RUN apk add --no-cache \
@@ -15,8 +15,8 @@ RUN apk add --no-cache \
     git \
     ca-certificates
 
-# Install Air for hot reload
-RUN go install github.com/air-verse/air@latest
+# Install Air for hot reload (v1.61.7 is compatible with Go 1.23)
+RUN go install github.com/air-verse/air@v1.61.7
 
 # Set working directory
 WORKDIR /app

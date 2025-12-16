@@ -15,8 +15,6 @@
 #   2. Set a strong password in secrets/db_password.txt
 #   3. Optionally customize environment variables below
 
-version: "3.8"
-
 services:
   # ==========================================================================
   # FlashPaper Application
@@ -39,6 +37,7 @@ services:
 
       # Database settings - PostgreSQL
       - FLASHPAPER_MODEL_CLASS=Database
+      - FLASHPAPER_MODEL_DRIVER=postgres
       - FLASHPAPER_MODEL_DSN=postgres://flashpaper:${DB_PASSWORD:-changeme}@db:5432/flashpaper?sslmode=disable
 
       # Traffic/rate limiting

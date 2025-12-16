@@ -8,8 +8,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-# Build command - CGO required for SQLite
-cmd = "CGO_ENABLED=1 go build -o ./tmp/flashpaper ./cmd/flashpaper/"
+# Build command - CGO required for SQLite, -buildvcs=false for container compatibility
+cmd = "CGO_ENABLED=1 go build -buildvcs=false -o ./tmp/flashpaper ./cmd/flashpaper/"
 # Binary to run after build
 bin = "./tmp/flashpaper"
 # Watch these file extensions

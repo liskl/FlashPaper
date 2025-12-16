@@ -15,8 +15,6 @@
 #   - Air must be installed: go install github.com/air-verse/air@latest
 #   - Or use the provided Dockerfile.dev
 
-version: "3.8"
-
 services:
   # ==========================================================================
   # FlashPaper Development Container
