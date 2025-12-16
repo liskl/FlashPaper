@@ -5,7 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>{{.Name}}</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <!-- Critical CSS inlined for faster initial render -->
+    <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg-primary:#f5f7fa;--bg-secondary:#ffffff;--bg-tertiary:#e9ecef;--text-primary:#212529;--text-secondary:#495057;--text-muted:#6c757d;--accent-primary:#e94560;--accent-secondary:#0f3460;--border-color:#dee2e6;--success:#28a745;--warning:#ffc107;--danger:#dc3545;--info:#17a2b8;--shadow:rgba(0,0,0,0.1);--spacing-xs:0.25rem;--spacing-sm:0.5rem;--spacing-md:1rem;--spacing-lg:1.5rem;--spacing-xl:2rem;--radius-sm:4px;--radius-md:8px;--radius-lg:12px;--transition-fast:0.15s ease;--transition-normal:0.3s ease}
+    [data-theme="dark"]{--bg-primary:#121212;--bg-secondary:#1e1e1e;--bg-tertiary:#2d2d2d;--text-primary:#e0e0e0;--text-secondary:#a0a0a0;--text-muted:#707070;--accent-primary:#808080;--accent-secondary:#505050;--border-color:#3d3d3d;--shadow:rgba(0,0,0,0.4)}
+    html{font-size:16px;line-height:1.5}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:var(--bg-primary);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;transition:background-color var(--transition-normal),color var(--transition-normal)}
+    .container{max-width:900px;width:100%;margin:0 auto;padding:var(--spacing-md);flex:1;display:flex;flex-direction:column}
+    header{padding:var(--spacing-lg) 0;border-bottom:1px solid var(--border-color);margin-bottom:var(--spacing-lg)}
+    .header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--spacing-xs)}
+    header h1{font-size:1.5rem;font-weight:700;margin:0}
+    header h1 a{color:var(--accent-primary);text-decoration:none}
+    .header-actions{display:flex;align-items:center;gap:var(--spacing-sm)}
+    .tagline{color:var(--text-secondary);font-size:0.875rem;margin:0}
+    .btn{display:inline-flex;align-items:center;justify-content:center;padding:var(--spacing-sm) var(--spacing-md);font-size:0.875rem;font-weight:500;text-decoration:none;border:1px solid var(--border-color);border-radius:var(--radius-sm);background-color:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;transition:all var(--transition-fast)}
+    .btn-sm{padding:var(--spacing-xs) var(--spacing-sm);font-size:0.8125rem}
+    .btn-primary{background-color:var(--accent-primary);border-color:var(--accent-primary);color:white}
+    main{flex:1}
+    .panel{background-color:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:var(--spacing-lg);margin-bottom:var(--spacing-lg);box-shadow:0 2px 4px var(--shadow)}
+    .toolbar{padding-bottom:var(--spacing-md);border-bottom:1px solid var(--border-color);margin-bottom:var(--spacing-md)}
+    .toolbar-row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--spacing-md)}
+    .toolbar-group{display:flex;align-items:center;gap:var(--spacing-xs)}
+    .toolbar-group>label{color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap}
+    .checkbox-label{display:flex;align-items:center;gap:var(--spacing-xs);cursor:pointer;color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap}
+    .toolbar-password{margin-left:auto}
+    .toolbar-password input{width:120px}
+    .toolbar-send{margin-left:var(--spacing-sm)}
+    select,input[type="text"],input[type="password"]{background-color:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:var(--spacing-xs) var(--spacing-sm);font-size:0.8125rem}
+    input[type="checkbox"]{width:0.875rem;height:0.875rem;accent-color:var(--accent-primary);cursor:pointer}
+    textarea{width:100%;min-height:300px;background-color:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);padding:var(--spacing-md);font-family:'Monaco','Menlo','Ubuntu Mono','Consolas',monospace;font-size:0.875rem;line-height:1.6;resize:vertical}
+    textarea::placeholder{color:var(--text-muted)}
+    .hidden{display:none!important}
+    .alert{padding:var(--spacing-md);border-radius:var(--radius-sm);margin-bottom:var(--spacing-md);border:1px solid}
+    footer{text-align:center;padding:var(--spacing-xl) 0;border-top:1px solid var(--border-color);margin-top:var(--spacing-xl);color:var(--text-secondary);font-size:0.875rem}
+    footer a{color:var(--accent-primary);text-decoration:none}
+    .security-note{margin-top:var(--spacing-sm);color:var(--text-muted);font-size:0.75rem}
+    </style>
+    <!-- Load full stylesheet asynchronously -->
+    <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
 </head>
 <body>
     <div class="container">
@@ -133,7 +172,7 @@
         </footer>
     </div>
 
-    <script src="/js/flashpaper.js"></script>
+    <script src="/js/flashpaper.js" defer></script>
     <script>
         // Initialize FlashPaper when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
