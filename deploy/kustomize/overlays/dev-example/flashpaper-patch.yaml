@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashpaper
+spec:
+  template:
+    spec:
+      containers:
+        - name: flashpaper
+          env:
+            - name: FLASHPAPER_MAIN_NAME
+              value: "FlashPaper Dev"
+            - name: FLASHPAPER_DB_TYPE
+              value: "postgres"
+            - name: FLASHPAPER_DB_HOST
+              value: "postgres"
+            - name: FLASHPAPER_DB_NAME
+              value: "flashpaper"
+            - name: FLASHPAPER_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: FLASHPAPER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
