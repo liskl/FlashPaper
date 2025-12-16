@@ -116,6 +116,9 @@ const FlashPaper = (function() {
         // Copy URL (now a button instead of anchor)
         document.getElementById('paste-url')?.addEventListener('click', copyUrl);
 
+        // Raw paste (show plain text in new tab)
+        document.getElementById('raw-paste')?.addEventListener('click', showRawPaste);
+
         // Delete paste
         document.getElementById('delete-paste')?.addEventListener('click', deletePaste);
 
@@ -660,6 +663,22 @@ const FlashPaper = (function() {
         } catch (error) {
             showAlert('Could not copy URL', 'error');
         }
+    }
+
+    /**
+     * Show raw paste content in a new tab
+     */
+    function showRawPaste() {
+        const content = document.getElementById('paste-text').textContent;
+        if (!content) {
+            showAlert('No content to display', 'error');
+            return;
+        }
+
+        // Create a blob with plain text content and open in new tab
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
     }
 
     /**
