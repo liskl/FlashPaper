@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/liskl/FlashPaper/compare/v1.0.2...v1.1.0) (2025-12-16)
+
+
+### Features
+
+* **deploy:** add Kustomize manifests for Kubernetes deployment ([#6](https://github.com/liskl/FlashPaper/issues/6)) ([ea86e8d](https://github.com/liskl/FlashPaper/commit/ea86e8db9e4a646637bf60e4250483569bdf2643))
+
 ## [1.0.2](https://github.com/liskl/FlashPaper/compare/v1.0.1...v1.0.2) (2025-12-16)
 
 
