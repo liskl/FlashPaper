@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashpaper
+spec:
+  template:
+    spec:
+      containers:
+        - name: flashpaper
+          env:
+            - name: FLASHPAPER_MAIN_NAME
+              value: "FlashPaper Dev"
+            - name: FLASHPAPER_MODEL_CLASS
+              value: "Database"
+            - name: FLASHPAPER_MODEL_DRIVER
+              value: "postgres"
+            - name: FLASHPAPER_MODEL_DSN
+              value: "postgres://flashpaper:flashpaper-dev-password@postgres:5432/flashpaper?sslmode=disable"
