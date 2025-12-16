@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{.Name}} - Implementation Details</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Implementation page specific styles */
+        .impl-content {
+            line-height: 1.8;
+        }
+        .impl-content h2 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        .impl-content h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+        .impl-content p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+        .impl-content ul, .impl-content ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+        .impl-content li {
+            margin-bottom: 0.5rem;
+        }
+        .impl-content code {
+            background-color: var(--bg-tertiary);
+            padding: 0.125rem 0.375rem;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            font-size: 0.875em;
+        }
+        .impl-content pre {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .impl-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .diagram {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            font-size: 0.8125rem;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        .note {
+            background-color: rgba(23, 162, 184, 0.1);
+            border-left: 4px solid var(--info);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .warning {
+            background-color: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
+            text-align: left;
+        }
+        th {
+            background-color: var(--bg-tertiary);
+            font-weight: 600;
+        }
+        .toc {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .toc h4 {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+        }
+        .toc ul {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+        .toc a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <h1><a href="/">{{.Name}}</a></h1>
+                <div class="header-actions">
+                    <a href="/" class="btn btn-sm">New Paste</a>
+                    <button id="theme-toggle" class="btn btn-sm" aria-label="Toggle dark mode">
+                        <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
+                        <span class="theme-toggle-text" id="theme-text">Dark</span>
+                    </button>
+                </div>
+            </div>
+            <p class="tagline">Implementation Details</p>
+        </header>
+
+        <main>
+            <div class="panel impl-content">
+                <h2>Abstract</h2>
+                <p>
+                    FlashPaper is a zero-knowledge encrypted pastebin implementation that ensures the server
+                    maintains no access to plaintext content at any point during the data lifecycle. This document
+                    provides a comprehensive technical analysis of the cryptographic protocols, system architecture,
+                    and security guarantees implemented within the system. The implementation achieves full API
+                    compatibility with PrivateBin while being written entirely in Go for improved performance
+                    and simplified deployment.
+                </p>
+
+                <nav class="toc">
+                    <h4>Table of Contents</h4>
+                    <ul>
+                        <li><a href="#crypto">1. Cryptographic Implementation</a></li>
+                        <li><a href="#key-management">2. Key Management and Derivation</a></li>
+                        <li><a href="#data-flow">3. Data Flow Architecture</a></li>
+                        <li><a href="#storage">4. Storage Layer</a></li>
+                        <li><a href="#api">5. API Protocol</a></li>
+                        <li><a href="#security">6. Security Analysis</a></li>
+                        <li><a href="#threat-model">7. Threat Model</a></li>
+                    </ul>
+                </nav>
+
+                <h2 id="crypto">1. Cryptographic Implementation</h2>
+
+                <h3>1.1 Symmetric Encryption</h3>
+                <p>
+                    FlashPaper employs AES-256-GCM (Advanced Encryption Standard with 256-bit keys in
+                    Galois/Counter Mode) for all content encryption. GCM mode provides both confidentiality
+                    and authenticity through authenticated encryption with associated data (AEAD).
+                </p>
+
+                <table>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                        <th>Specification</th>
+                    </tr>
+                    <tr>
+                        <td>Algorithm</td>
+                        <td>AES-256-GCM</td>
+                        <td>NIST SP 800-38D</td>
+                    </tr>
+                    <tr>
+                        <td>Key Size</td>
+                        <td>256 bits</td>
+                        <td>Provides 128-bit security level</td>
+                    </tr>
+                    <tr>
+                        <td>IV/Nonce Size</td>
+                        <td>128 bits (16 bytes)</td>
+                        <td>Randomly generated per encryption</td>
+                    </tr>
+                    <tr>
+                        <td>Authentication Tag</td>
+                        <td>128 bits</td>
+                        <td>Appended to ciphertext</td>
+                    </tr>
+                </table>
+
+                <h3>1.2 Key Derivation Function</h3>
+                <p>
+                    Encryption keys are derived using PBKDF2 (Password-Based Key Derivation Function 2)
+                    with SHA-256 as the underlying hash function. This approach enables optional password
+                    protection while maintaining security through computational hardening.
+                </p>
+
+                <pre><code>DerivedKey = PBKDF2(
+    PRF: HMAC-SHA256,
+    Password: MasterKey || UserPassword,
+    Salt: RandomSalt[8 bytes],
+    Iterations: 100,000,
+    KeyLength: 256 bits
+)</code></pre>
+
+                <div class="note">
+                    <strong>Implementation Note:</strong> The iteration count of 100,000 is calibrated to provide
+                    approximately 100ms of computation time on modern hardware, balancing security against
+                    user experience. This value aligns with OWASP recommendations for PBKDF2-HMAC-SHA256.
+                </div>
+
+                <h3>1.3 Authenticated Data Structure</h3>
+                <p>
+                    The Additional Authenticated Data (AAD) in GCM mode binds the ciphertext to its metadata,
+                    preventing tampering with encryption parameters:
+                </p>
+
+                <pre><code>AData = [
+    [IV_base64, Salt_base64, Iterations, KeySize, TagSize, "aes", "gcm", Compression],
+    Formatter,      // "plaintext" | "syntaxhighlighting" | "markdown"
+    OpenDiscussion, // 0 | 1
+    BurnAfterReading // 0 | 1
+]</code></pre>
+
+                <h2 id="key-management">2. Key Management and Derivation</h2>
+
+                <h3>2.1 Master Key Generation</h3>
+                <p>
+                    For each paste, the client generates a cryptographically secure random 256-bit master key
+                    using the Web Crypto API's <code>crypto.getRandomValues()</code>. This function provides
+                    access to the operating system's cryptographic random number generator (CSPRNG).
+                </p>
+
+                <pre><code>// Client-side key generation
+const masterKey = new Uint8Array(32);  // 256 bits
+crypto.getRandomValues(masterKey);</code></pre>
+
+                <h3>2.2 Key Distribution via URL Fragment</h3>
+                <p>
+                    The master key is encoded using Base58 (Bitcoin alphabet) and placed in the URL fragment
+                    identifier. Per RFC 3986 §3.5, fragment identifiers are processed exclusively by the
+                    user agent and are <em>never</em> transmitted to the server.
+                </p>
+
+                <div class="diagram">┌─────────────────────────────────────────────────────────────────────────────┐
+│                              URL Structure                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  https://example.com/?f468483c313401e8#7JqYpr5K2zXmNvQWRtBgHsC              │
+│  └────────┬────────┘ └───────┬────────┘└─────────────┬──────────┘           │
+│        Origin            Paste ID              Fragment (Key)                │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │ Transmitted to Server: https://example.com/?f468483c313401e8         │   │
+│  │ Client-Only:           #7JqYpr5K2zXmNvQWRtBgHsC (never sent)         │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+
+                <h3>2.3 Base58 Encoding</h3>
+                <p>
+                    Base58 encoding (Bitcoin variant) is employed for key representation, omitting visually
+                    ambiguous characters (0, O, I, l) to reduce transcription errors:
+                </p>
+                <pre><code>Alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz</code></pre>
+
+                <h2 id="data-flow">3. Data Flow Architecture</h2>
+
+                <h3>3.1 Paste Creation Sequence</h3>
+                <div class="diagram">┌──────────┐                                              ┌──────────┐
+│  Client  │                                              │  Server  │
+└────┬─────┘                                              └────┬─────┘
+     │                                                         │
+     │  1. Generate MasterKey (256-bit random)                 │
+     │  2. Generate IV (128-bit random)                        │
+     │  3. Generate Salt (64-bit random)                       │
+     │  4. DerivedKey = PBKDF2(MasterKey||Password, Salt)      │
+     │  5. Ciphertext = AES-GCM-Encrypt(Plaintext, DerivedKey) │
+     │                                                         │
+     │  POST {ct: Ciphertext, adata: [IV, Salt, ...]}         │
+     │ ─────────────────────────────────────────────────────► │
+     │                                                         │
+     │                          {id: "f468...", deletetoken}   │
+     │ ◄───────────────────────────────────────────────────── │
+     │                                                         │
+     │  6. Construct URL: /?{id}#{Base58(MasterKey)}           │
+     │                                                         │
+     ▼                                                         ▼</div>
+
+                <h3>3.2 Paste Retrieval Sequence</h3>
+                <div class="diagram">┌──────────┐                                              ┌──────────┐
+│  Client  │                                              │  Server  │
+└────┬─────┘                                              └────┬─────┘
+     │                                                         │
+     │  1. Parse URL: extract PasteID and MasterKey            │
+     │                                                         │
+     │  GET /?{PasteID}                                        │
+     │ ─────────────────────────────────────────────────────► │
+     │                                                         │
+     │              {ct: Ciphertext, adata: [IV, Salt, ...]}   │
+     │ ◄───────────────────────────────────────────────────── │
+     │                                                         │
+     │  2. Extract IV, Salt from adata                         │
+     │  3. DerivedKey = PBKDF2(MasterKey||Password, Salt)      │
+     │  4. Plaintext = AES-GCM-Decrypt(Ciphertext, DerivedKey) │
+     │  5. Verify authentication tag (implicit in GCM)         │
+     │  6. Display Plaintext                                   │
+     │                                                         │
+     ▼                                                         ▼</div>
+
+                <h2 id="storage">4. Storage Layer</h2>
+
+                <h3>4.1 Supported Backends</h3>
+                <p>
+                    FlashPaper implements a storage abstraction layer supporting multiple backends:
+                </p>
+                <table>
+                    <tr>
+                        <th>Backend</th>
+                        <th>Use Case</th>
+                        <th>Characteristics</th>
+                    </tr>
+                    <tr>
+                        <td>SQLite</td>
+                        <td>Single-instance deployment</td>
+                        <td>Embedded, zero-configuration, file-based</td>
+                    </tr>
+                    <tr>
+                        <td>PostgreSQL</td>
+                        <td>Production deployment</td>
+                        <td>ACID compliant, concurrent access, replication support</td>
+                    </tr>
+                    <tr>
+                        <td>MySQL</td>
+                        <td>Existing infrastructure</td>
+                        <td>Wide compatibility, mature tooling</td>
+                    </tr>
+                    <tr>
+                        <td>Filesystem</td>
+                        <td>Simple deployments</td>
+                        <td>No database required, directory-based sharding</td>
+                    </tr>
+                </table>
+
+                <h3>4.2 Data Schema</h3>
+                <p>
+                    The storage layer persists only encrypted ciphertext and associated metadata.
+                    At no point does the server process, log, or store plaintext content.
+                </p>
+
+                <pre><code>Paste {
+    id:              string    // 16 hex characters
+    data:            blob      // Base64-encoded ciphertext
+    adata:           json      // Authenticated data (IV, salt, params)
+    attachment:      blob      // Optional encrypted attachment
+    attachment_name: string    // Optional encrypted filename
+    expire_date:     timestamp // Unix timestamp (0 = never)
+    burn_after_read: boolean   // Delete on first retrieval
+    open_discussion: boolean   // Allow encrypted comments
+    created_at:      timestamp // Creation time
+}</code></pre>
+
+                <h3>4.3 Delete Token Generation</h3>
+                <p>
+                    Delete tokens are generated server-side using HMAC-SHA256 with a persistent server salt,
+                    enabling paste deletion by the original creator without authentication:
+                </p>
+
+                <pre><code>DeleteToken = HMAC-SHA256(ServerSalt, PasteID)
+// Returned only during paste creation
+// Must be presented for deletion authorization</code></pre>
+
+                <h2 id="api">5. API Protocol</h2>
+
+                <h3>5.1 Endpoints</h3>
+                <table>
+                    <tr>
+                        <th>Method</th>
+                        <th>Path</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/</code></td>
+                        <td>Serve web interface</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/?{pasteID}</code></td>
+                        <td>Retrieve paste (JSON if X-Requested-With header)</td>
+                    </tr>
+                    <tr>
+                        <td><code>POST</code></td>
+                        <td><code>/</code></td>
+                        <td>Create paste or comment</td>
+                    </tr>
+                    <tr>
+                        <td><code>DELETE</code></td>
+                        <td><code>/</code></td>
+                        <td>Delete paste (requires deletetoken)</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/health</code></td>
+                        <td>Health check endpoint</td>
+                    </tr>
+                </table>
+
+                <h3>5.2 Request/Response Format</h3>
+                <p><strong>Create Paste Request:</strong></p>
+                <pre><code>{
+    "v": 2,
+    "ct": "base64_encoded_ciphertext",
+    "adata": [
+        ["IV_b64", "salt_b64", 100000, 256, 128, "aes", "gcm", "none"],
+        "plaintext",
+        0,
+        0
+    ],
+    "meta": {
+        "expire": "1week"
+    }
+}</code></pre>
+
+                <p><strong>Create Paste Response:</strong></p>
+                <pre><code>{
+    "status": 0,
+    "id": "f468483c313401e8",
+    "url": "/?f468483c313401e8",
+    "deletetoken": "a1b2c3d4..."
+}</code></pre>
+
+                <h2 id="security">6. Security Analysis</h2>
+
+                <h3>6.1 Zero-Knowledge Property</h3>
+                <p>
+                    The system achieves zero-knowledge through architectural separation: the decryption key
+                    exists only in the URL fragment, which is processed exclusively client-side per HTTP
+                    specifications. The server receives and stores only ciphertext, making it computationally
+                    infeasible to recover plaintext without the key.
+                </p>
+
+                <div class="warning">
+                    <strong>Security Consideration:</strong> The zero-knowledge property depends on correct
+                    client implementation. A malicious or compromised client could transmit the key to the
+                    server. Users should verify they are using official client code and secure HTTPS connections.
+                </div>
+
+                <h3>6.2 Forward Secrecy</h3>
+                <p>
+                    Each paste uses a unique, randomly generated master key. Compromise of one paste's key
+                    does not affect the confidentiality of other pastes. The PBKDF2 salt ensures identical
+                    plaintexts encrypted with the same password produce different ciphertexts.
+                </p>
+
+                <h3>6.3 Authentication Guarantees</h3>
+                <p>
+                    AES-GCM provides authenticated encryption, ensuring:
+                </p>
+                <ul>
+                    <li><strong>Integrity:</strong> Any modification to ciphertext or AAD causes decryption failure</li>
+                    <li><strong>Authenticity:</strong> Only parties with the correct key can produce valid ciphertext</li>
+                    <li><strong>Confidentiality:</strong> Ciphertext reveals no information about plaintext</li>
+                </ul>
+
+                <h3>6.4 Burn-After-Reading Implementation</h3>
+                <p>
+                    When enabled, the paste is atomically deleted from storage upon first successful retrieval.
+                    The deletion occurs before the response is sent, ensuring the data cannot be retrieved again
+                    even if the response transmission fails.
+                </p>
+
+                <h2 id="threat-model">7. Threat Model</h2>
+
+                <h3>7.1 Protected Against</h3>
+                <ul>
+                    <li><strong>Server compromise:</strong> Attacker gaining database access cannot decrypt stored pastes</li>
+                    <li><strong>Network eavesdropping:</strong> HTTPS protects transmission; key never leaves client</li>
+                    <li><strong>Server-side logging:</strong> Only encrypted data and metadata are processed</li>
+                    <li><strong>Database breach:</strong> Stored ciphertext is computationally indistinguishable from random</li>
+                </ul>
+
+                <h3>7.2 Not Protected Against</h3>
+                <ul>
+                    <li><strong>Client compromise:</strong> Malware on user's device can capture plaintext</li>
+                    <li><strong>Key exposure:</strong> Sharing the full URL exposes the decryption key</li>
+                    <li><strong>Browser vulnerabilities:</strong> XSS or other client-side attacks could leak data</li>
+                    <li><strong>Traffic analysis:</strong> Timing and size of requests may leak metadata</li>
+                    <li><strong>Malicious server code:</strong> Server could serve modified JavaScript to capture keys</li>
+                </ul>
+
+                <h3>7.3 Mitigations</h3>
+                <ul>
+                    <li>Content Security Policy (CSP) headers prevent inline script injection</li>
+                    <li>Subresource Integrity (SRI) can verify JavaScript integrity</li>
+                    <li>HTTPS enforcement prevents network-level tampering</li>
+                    <li>Rate limiting mitigates brute-force attempts</li>
+                    <li>Automatic expiration limits exposure window</li>
+                </ul>
+
+                <h2>References</h2>
+                <ul>
+                    <li>NIST SP 800-38D: Recommendation for Block Cipher Modes of Operation: Galois/Counter Mode (GCM)</li>
+                    <li>RFC 2898: PKCS #5: Password-Based Cryptography Specification Version 2.0</li>
+                    <li>RFC 3986: Uniform Resource Identifier (URI): Generic Syntax</li>
+                    <li>OWASP Password Storage Cheat Sheet</li>
+                    <li>Web Crypto API Specification (W3C)</li>
+                </ul>
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                <a href="https://github.com/liskl/flashpaper" target="_blank">FlashPaper</a> -
+                A Go implementation of <a href="https://privatebin.info/" target="_blank">PrivateBin</a>
+            </p>
+            <p class="security-note">
+                All data is encrypted in your browser. The server never sees your content.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        (function() {
+            const toggle = document.getElementById('theme-toggle');
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+
+            function setTheme(theme) {
+                if (theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    icon.innerHTML = '&#9728;';
+                    text.textContent = 'Light';
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                    icon.innerHTML = '&#9790;';
+                    text.textContent = 'Dark';
+                }
+                localStorage.setItem('flashpaper-theme', theme);
+            }
+
+            // Initialize theme
+            const saved = localStorage.getItem('flashpaper-theme');
+            if (saved) setTheme(saved);
+
+            toggle.addEventListener('click', function() {
+                const current = document.documentElement.getAttribute('data-theme');
+                setTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        })();
+    </script>
+</body>
+</html>
