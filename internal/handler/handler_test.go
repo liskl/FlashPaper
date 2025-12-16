@@ -1154,3 +1154,506 @@ func TestCountByte(t *testing.T) {
 		})
 	}
 }
+
+// TestServeDocs tests the /docs documentation page handler.
+func TestServeDocs(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	// Initialize templates from embedded FS
+	h.initTemplates()
+
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	rr := httptest.NewRecorder()
+
+	h.serveDocs(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		t.Errorf("expected Content-Type text/html, got %s", contentType)
+	}
+
+	// Check response contains expected content
+	body := rr.Body.String()
+	if !strings.Contains(body, "<html") {
+		t.Errorf("expected HTML response")
+	}
+	if !strings.Contains(body, "Documentation") {
+		t.Errorf("expected 'Documentation' in response")
+	}
+	if !strings.Contains(body, "Installation") {
+		t.Errorf("expected 'Installation' section in response")
+	}
+	if !strings.Contains(body, "API Reference") {
+		t.Errorf("expected 'API Reference' section in response")
+	}
+}
+
+// TestServeDocs_NoTemplate tests fallback when template is not available.
+func TestServeDocs_NoTemplate(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	// Don't initialize templates - leave h.template as nil
+
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	rr := httptest.NewRecorder()
+
+	h.serveDocs(rr, req)
+
+	// Should return 500 error when template is not available
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+
+	// Check error message
+	body := rr.Body.String()
+	if !strings.Contains(body, "Documentation not available") {
+		t.Errorf("expected 'Documentation not available' error message, got: %s", body)
+	}
+}
+
+// TestDocsRoute tests the /docs route via the router.
+func TestDocsRoute(t *testing.T) {
+	h, _ := newTestHandler(t)
+	h.initTemplates()
+
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		t.Errorf("expected Content-Type text/html, got %s", contentType)
+	}
+}
+
+// TestServeImplementation tests the /implementation documentation page handler.
+func TestServeImplementation(t *testing.T) {
+	h, _ := newTestHandler(t)
+	h.initTemplates()
+
+	req := httptest.NewRequest(http.MethodGet, "/implementation", nil)
+	rr := httptest.NewRecorder()
+
+	h.serveImplementation(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		t.Errorf("expected Content-Type text/html, got %s", contentType)
+	}
+
+	// Check response contains expected content
+	body := rr.Body.String()
+	if !strings.Contains(body, "<html") {
+		t.Errorf("expected HTML response")
+	}
+	if !strings.Contains(body, "Implementation") {
+		t.Errorf("expected 'Implementation' in response")
+	}
+	if !strings.Contains(body, "Cryptographic") {
+		t.Errorf("expected cryptographic documentation in response")
+	}
+}
+
+// TestServeImplementation_NoTemplate tests fallback when template is not available.
+func TestServeImplementation_NoTemplate(t *testing.T) {
+	h, _ := newTestHandler(t)
+	// Don't initialize templates
+
+	req := httptest.NewRequest(http.MethodGet, "/implementation", nil)
+	rr := httptest.NewRecorder()
+
+	h.serveImplementation(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Implementation documentation not available") {
+		t.Errorf("expected error message, got: %s", body)
+	}
+}
+
+// TestImplementationRoute tests the /implementation route via the router.
+func TestImplementationRoute(t *testing.T) {
+	h, _ := newTestHandler(t)
+	h.initTemplates()
+
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/implementation", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+}
+
+// TestStaticFileServing tests that static JS and CSS files are served.
+func TestStaticFileServing(t *testing.T) {
+	h, _ := newTestHandler(t)
+	h.initStaticFS()
+
+	router := h.Routes()
+
+	tests := []struct {
+		name        string
+		path        string
+		contentType string
+	}{
+		{"JavaScript file", "/js/flashpaper.js", "application/javascript"},
+		{"CSS file", "/css/style.css", "text/css"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+
+			router.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Errorf("expected status %d for %s, got %d", http.StatusOK, tt.path, rr.Code)
+			}
+
+			// Check that content is not empty
+			if rr.Body.Len() == 0 {
+				t.Errorf("expected non-empty response for %s", tt.path)
+			}
+		})
+	}
+}
+
+// TestStaticFileNotFound tests 404 for non-existent static files.
+func TestStaticFileNotFound(t *testing.T) {
+	h, _ := newTestHandler(t)
+	h.initStaticFS()
+
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/js/nonexistent.js", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+	}
+}
+
+// TestHandlerNew tests the New constructor function.
+func TestHandlerNew(t *testing.T) {
+	cfg := &config.Config{
+		Main: config.MainConfig{
+			Name:       "TestPaste",
+			BasePath:   "",
+			Discussion: true,
+		},
+	}
+
+	mockStore := storage.NewMock()
+	h := New(cfg, mockStore)
+
+	if h == nil {
+		t.Fatal("expected non-nil handler")
+	}
+
+	if h.config != cfg {
+		t.Error("config not set correctly")
+	}
+
+	if h.store != mockStore {
+		t.Error("store not set correctly")
+	}
+
+	// Salt should be initialized
+	if h.salt == "" {
+		t.Error("salt should be initialized")
+	}
+
+	// Templates should be initialized
+	if h.template == nil {
+		t.Error("template should be initialized")
+	}
+
+	// Static FS should be initialized
+	if h.staticFS == nil {
+		t.Error("staticFS should be initialized")
+	}
+}
+
+// TestHandleDeleteMethod tests the DELETE HTTP method handler.
+func TestHandleDeleteMethod(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	// Create a paste
+	pasteID := "de1e7eaabbccdd00"
+	paste := model.NewPaste()
+	paste.Data = "to-be-deleted"
+	mockStore.CreatePaste(pasteID, paste)
+
+	// Generate valid delete token
+	deleteToken, _ := util.GenerateDeleteToken(pasteID, h.salt)
+
+	// Use DELETE method (not POST)
+	reqBody := map[string]interface{}{
+		"pasteid":     pasteID,
+		"deletetoken": deleteToken,
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodDelete, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handleDelete(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	// Verify paste was deleted
+	if mockStore.PasteExists(pasteID) {
+		t.Error("paste should have been deleted")
+	}
+}
+
+// TestHandleDeleteInvalidJSON tests DELETE with invalid JSON.
+func TestHandleDeleteInvalidJSON(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodDelete, "/", strings.NewReader("{invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handleDelete(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
+// TestServeUI_WithPasteID tests serving UI when paste ID is in query.
+func TestServeUI_WithPasteID(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+	h.initTemplates()
+
+	// Create a paste
+	pasteID := "abcd1234abcd1234"
+	paste := model.NewPaste()
+	paste.Data = "test-content"
+	mockStore.CreatePaste(pasteID, paste)
+
+	// Request with paste ID but no JSON header (should serve UI)
+	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID, nil)
+	req.Header.Set("Accept", "text/html")
+	rr := httptest.NewRecorder()
+
+	h.handleGet(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		t.Errorf("expected text/html, got %s", contentType)
+	}
+}
+
+// TestServeUI_Fallback tests UI fallback when template is nil.
+func TestServeUI_Fallback(t *testing.T) {
+	h, _ := newTestHandler(t)
+	// Don't initialize templates
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	h.serveUI(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "FlashPaper") {
+		t.Error("expected fallback HTML with FlashPaper")
+	}
+	if !strings.Contains(body, "Error loading template") {
+		t.Error("expected error message in fallback")
+	}
+}
+
+// TestGetPaste_WithQueryParams tests paste ID extraction with extra query params.
+func TestGetPaste_WithQueryParams(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	pasteID := "aaaa1111bbbb2222"
+	paste := model.NewPaste()
+	paste.Data = "test-data"
+	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",0,0]`)
+	mockStore.CreatePaste(pasteID, paste)
+
+	// Request with extra query parameters after paste ID
+	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID+"&extra=param", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handleGet(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	if response["id"] != pasteID {
+		t.Errorf("expected paste ID %s, got %v", pasteID, response["id"])
+	}
+}
+
+// TestCreatePaste_WithBurnAfterReading tests creating a burn-after-reading paste.
+func TestCreatePaste_WithBurnAfterReading(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": "secret-content",
+		"adata": []interface{}{
+			[]interface{}{"iv", "salt", 100000, 256, 128, "aes", "gcm", "zlib"},
+			"plaintext",
+			0, // opendiscussion
+			1, // burnafterreading
+		},
+		"meta": map[string]interface{}{
+			"expire": "1day",
+		},
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	pasteID := response["id"].(string)
+
+	// Verify burn flag was set
+	paste, _ := mockStore.ReadPaste(pasteID)
+	if !paste.Meta.BurnAfterReading {
+		t.Error("burn after reading flag should be set")
+	}
+}
+
+// TestCreatePaste_WithOpenDiscussion tests creating a paste with open discussion.
+func TestCreatePaste_WithOpenDiscussion(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": "discussion-content",
+		"adata": []interface{}{
+			[]interface{}{"iv", "salt", 100000, 256, 128, "aes", "gcm", "zlib"},
+			"plaintext",
+			1, // opendiscussion
+			0, // burnafterreading
+		},
+		"meta": map[string]interface{}{
+			"expire": "1week",
+		},
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	pasteID := response["id"].(string)
+
+	// Verify discussion flag was set
+	paste, _ := mockStore.ReadPaste(pasteID)
+	if !paste.Meta.OpenDiscussion {
+		t.Error("open discussion flag should be set")
+	}
+}
+
+// TestCreatePaste_NeverExpire tests creating a paste that never expires.
+func TestCreatePaste_NeverExpire(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": "permanent-content",
+		"adata": []interface{}{
+			[]interface{}{"iv", "salt", 100000, 256, 128, "aes", "gcm", "zlib"},
+			"plaintext",
+			0,
+			0,
+		},
+		"meta": map[string]interface{}{
+			"expire": "never",
+		},
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	pasteID := response["id"].(string)
+
+	// Verify no expiration (ExpireDate = 0 means never expires)
+	paste, _ := mockStore.ReadPaste(pasteID)
+	if paste.Meta.ExpireDate != 0 {
+		t.Errorf("expected no expiration (0), got %d", paste.Meta.ExpireDate)
+	}
+}

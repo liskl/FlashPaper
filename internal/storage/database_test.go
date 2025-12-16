@@ -668,6 +668,173 @@ func TestDatabase_EncryptedContentRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDatabase_PurgeValues tests the PurgeValues function.
+func TestDatabase_PurgeValues(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create some values in different namespaces
+	err = db.SetValue("traffic", "ip1", "1234567890")
+	require.NoError(t, err)
+	err = db.SetValue("traffic", "ip2", "1234567891")
+	require.NoError(t, err)
+	err = db.SetValue("salt", "server", "serversalt")
+	require.NoError(t, err)
+
+	// Purge the traffic namespace (maxAge 0 means purge all)
+	err = db.PurgeValues("traffic", 0)
+	require.NoError(t, err)
+
+	// Traffic values should be gone
+	val, err := db.GetValue("traffic", "ip1")
+	require.NoError(t, err)
+	assert.Empty(t, val)
+
+	val, err = db.GetValue("traffic", "ip2")
+	require.NoError(t, err)
+	assert.Empty(t, val)
+
+	// Salt value should still exist
+	val, err = db.GetValue("salt", "server")
+	require.NoError(t, err)
+	assert.Equal(t, "serversalt", val)
+}
+
+// TestDatabase_Purge_WithNeverExpire tests that pastes with no expiration are not purged.
+func TestDatabase_Purge_WithNeverExpire(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create paste that never expires (ExpireDate = 0)
+	neverExpire := &model.Paste{
+		Data: "permanent content",
+		Meta: model.PasteMeta{
+			ExpireDate: 0, // Never expires
+		},
+	}
+	err = db.CreatePaste("permanent1", neverExpire)
+	require.NoError(t, err)
+
+	// Create expired paste
+	expired := &model.Paste{
+		Data: "expired content",
+		Meta: model.PasteMeta{
+			ExpireDate: time.Now().Add(-time.Hour).Unix(),
+		},
+	}
+	err = db.CreatePaste("expired1", expired)
+	require.NoError(t, err)
+
+	// Purge
+	count, err := db.Purge(10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count) // Only expired paste should be purged
+
+	// Verify permanent paste still exists
+	assert.True(t, db.PasteExists("permanent1"))
+	assert.False(t, db.PasteExists("expired1"))
+}
+
+// TestDatabase_GetExpiredPastes_WithLimit tests the limit parameter.
+func TestDatabase_GetExpiredPastes_WithLimit(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create many expired pastes
+	for i := 0; i < 10; i++ {
+		paste := &model.Paste{
+			Data: "content",
+			Meta: model.PasteMeta{
+				ExpireDate: time.Now().Add(-time.Hour).Unix(),
+			},
+		}
+		err = db.CreatePaste("expired"+string(rune('a'+i))+"12345", paste)
+		require.NoError(t, err)
+	}
+
+	// Get with limit
+	expired, err := db.GetExpiredPastes(5)
+	require.NoError(t, err)
+	assert.Len(t, expired, 5)
+}
+
+// TestDatabase_CommentExists tests the CommentExists function.
+func TestDatabase_CommentExists(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create paste
+	paste := &model.Paste{Data: "content", Meta: model.PasteMeta{OpenDiscussion: true}}
+	err = db.CreatePaste("paste123", paste)
+	require.NoError(t, err)
+
+	// Comment doesn't exist yet
+	assert.False(t, db.CommentExists("paste123", "", "comment1"))
+
+	// Create comment
+	comment := &model.Comment{Data: "comment", Meta: model.CommentMeta{PostDate: time.Now().Unix()}}
+	err = db.CreateComment("paste123", "", "comment1", comment)
+	require.NoError(t, err)
+
+	// Now it exists
+	assert.True(t, db.CommentExists("paste123", "", "comment1"))
+
+	// Different comment ID doesn't exist
+	assert.False(t, db.CommentExists("paste123", "", "comment2"))
+}
+
+// TestDatabase_ReadPaste_WithAData tests reading paste with AData field.
+func TestDatabase_ReadPaste_WithAData(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	adataStr := `[["iv_b64","salt_b64",100000,256,128,"aes","gcm","zlib"],"plaintext",1,0]`
+
+	original := &model.Paste{
+		Data:    "encrypted",
+		Version: 2,
+		AData:   []byte(adataStr),
+		Meta: model.PasteMeta{
+			PostDate:       time.Now().Unix(),
+			OpenDiscussion: true,
+		},
+	}
+
+	err = db.CreatePaste("adatatest", original)
+	require.NoError(t, err)
+
+	read, err := db.ReadPaste("adatatest")
+	require.NoError(t, err)
+
+	// Compare as strings to avoid type mismatch between []byte and json.RawMessage
+	assert.Equal(t, adataStr, string(read.AData))
+}
+
+// TestDatabase_Close tests the Close function.
+func TestDatabase_Close(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+
+	// Close should not error
+	err = db.Close()
+	require.NoError(t, err)
+
+	// Operations after close should fail
+	_, err = db.ReadPaste("test")
+	assert.Error(t, err)
+}
+
 // Skip this test if DATABASE_URL is not set (for CI integration)
 func TestDatabase_PostgresIntegration(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")
