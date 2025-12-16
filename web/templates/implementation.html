@@ -251,12 +251,12 @@ crypto.getRandomValues(masterKey);</code></pre>
                 </p>
 
                 <div class="diagram">┌─────────────────────────────────────────────────────────────────────────────┐
-│                              URL Structure                                   │
+│                              URL Structure                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  https://example.com/?f468483c313401e8#7JqYpr5K2zXmNvQWRtBgHsC              │
 │  └────────┬────────┘ └───────┬────────┘└─────────────┬──────────┘           │
-│        Origin            Paste ID              Fragment (Key)                │
-│                                                                              │
+│        Origin            Paste ID              Fragment (Key)               │
+│                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │ Transmitted to Server: https://example.com/?f468483c313401e8         │   │
 │  │ Client-Only:           #7JqYpr5K2zXmNvQWRtBgHsC (never sent)         │   │
@@ -283,11 +283,11 @@ crypto.getRandomValues(masterKey);</code></pre>
      │  4. DerivedKey = PBKDF2(MasterKey||Password, Salt)      │
      │  5. Ciphertext = AES-GCM-Encrypt(Plaintext, DerivedKey) │
      │                                                         │
-     │  POST {ct: Ciphertext, adata: [IV, Salt, ...]}         │
-     │ ─────────────────────────────────────────────────────► │
+     │  POST {ct: Ciphertext, adata: [IV, Salt, ...]}          │
+     │ ─────────────────────────────────────────────────────►  │
      │                                                         │
      │                          {id: "f468...", deletetoken}   │
-     │ ◄───────────────────────────────────────────────────── │
+     │ ◄─────────────────────────────────────────────────────  │
      │                                                         │
      │  6. Construct URL: /?{id}#{Base58(MasterKey)}           │
      │                                                         │
@@ -301,10 +301,10 @@ crypto.getRandomValues(masterKey);</code></pre>
      │  1. Parse URL: extract PasteID and MasterKey            │
      │                                                         │
      │  GET /?{PasteID}                                        │
-     │ ─────────────────────────────────────────────────────► │
+     │ ─────────────────────────────────────────────────────►  │
      │                                                         │
      │              {ct: Ciphertext, adata: [IV, Salt, ...]}   │
-     │ ◄───────────────────────────────────────────────────── │
+     │ ◄─────────────────────────────────────────────────────  │
      │                                                         │
      │  2. Extract IV, Salt from adata                         │
      │  3. DerivedKey = PBKDF2(MasterKey||Password, Salt)      │
