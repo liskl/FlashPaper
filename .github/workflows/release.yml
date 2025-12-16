@@ -12,6 +12,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -36,6 +37,31 @@ jobs:
             @semantic-release/github
 
       - name: Run semantic-release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          output=$(npx semantic-release 2>&1) || true
+          echo "$output"
+          # Extract the new version if released
+          new_version=$(echo "$output" | grep -oP 'Published release \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+          if [ -n "$new_version" ]; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "new_version=$new_version" >> $GITHUB_OUTPUT
+            echo "New version released: $new_version"
+          else
+            echo "new_release=false" >> $GITHUB_OUTPUT
+            echo "No new version released"
+          fi
+
+      - name: Trigger Docker build for new release
+        if: steps.semantic.outputs.new_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker.yml/dispatches \
+            -d '{"ref":"main","inputs":{"ref":"v${{ steps.semantic.outputs.new_version }}"}}'
+          echo "Triggered Docker build for v${{ steps.semantic.outputs.new_version }}"
