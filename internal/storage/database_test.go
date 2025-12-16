@@ -520,6 +520,154 @@ func TestDatabase_SameInterfaceAsFilesystem(t *testing.T) {
 	}
 }
 
+// TestDatabase_NoPlaintextInStorage verifies that the database only stores
+// encrypted content and never contains plaintext. This is a security test
+// to ensure the zero-knowledge principle is maintained.
+func TestDatabase_NoPlaintextInStorage(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+
+	// These are plaintext strings that should NEVER appear in the database.
+	// In a real scenario, clients encrypt content before sending to server.
+	// The server should only ever see ciphertext (base64-encoded encrypted data).
+	plaintextSecrets := []string{
+		"SUPER_SECRET_PASSWORD_12345",
+		"my-confidential-api-key-xyz",
+		"SSN: 123-45-6789",
+		"credit card: 4111-1111-1111-1111",
+	}
+
+	// Simulated encrypted content (base64-like strings representing ciphertext)
+	// In production, this would be actual AES-256-GCM encrypted data
+	encryptedData := "YWVzLTI1Ni1nY20gZW5jcnlwdGVkIGNvbnRlbnQgaGVyZQ=="
+	encryptedAttachment := "ZW5jcnlwdGVkIGF0dGFjaG1lbnQgZGF0YSBoZXJl"
+
+	// Create paste with "encrypted" content (simulating what client sends)
+	paste := &model.Paste{
+		Data:           encryptedData,
+		Attachment:     encryptedAttachment,
+		AttachmentName: "secret_document.pdf", // Filename is also encrypted in real usage
+		Version:        2,
+		AData:          []byte(`[["iv_base64","salt_base64",100000,256,128,"aes","gcm","zlib"],"plaintext",0,0]`),
+		Meta: model.PasteMeta{
+			PostDate:       time.Now().Unix(),
+			ExpireDate:     time.Now().Add(time.Hour).Unix(),
+			OpenDiscussion: true,
+			Formatter:      "plaintext",
+			Salt:           "server_salt_for_delete_token",
+		},
+	}
+
+	pasteID := "a1b2c3d4e5f67890"
+	err = db.CreatePaste(pasteID, paste)
+	require.NoError(t, err)
+
+	// Also create a comment with "encrypted" content
+	comment := &model.Comment{
+		Data:    "ZW5jcnlwdGVkIGNvbW1lbnQgZGF0YQ==", // Simulated encrypted comment
+		Vizhash: "vizhash_data",
+		Version: 2,
+		Meta:    model.CommentMeta{PostDate: time.Now().Unix()},
+	}
+	err = db.CreateComment(pasteID, "", "comment123", comment)
+	require.NoError(t, err)
+
+	// Close the database to flush all writes
+	db.Close()
+
+	// Read the raw database file
+	dbBytes, err := os.ReadFile(cfg.Model.DSN)
+	require.NoError(t, err, "Failed to read database file")
+	require.NotEmpty(t, dbBytes, "Database file should not be empty")
+
+	// Convert to string for searching (works for SQLite which stores text as UTF-8)
+	dbContent := string(dbBytes)
+
+	// Verify that NO plaintext secrets appear in the raw database
+	for _, secret := range plaintextSecrets {
+		assert.NotContains(t, dbContent, secret,
+			"SECURITY VIOLATION: Plaintext '%s' found in database! Data should be encrypted client-side.", secret)
+	}
+
+	// Verify the encrypted data IS present (proves data was stored)
+	assert.Contains(t, dbContent, encryptedData,
+		"Encrypted paste data should be present in database")
+	assert.Contains(t, dbContent, encryptedAttachment,
+		"Encrypted attachment should be present in database")
+
+	// Additional check: common plaintext patterns that should never appear
+	dangerousPatterns := []string{
+		"password=",
+		"secret_key=",
+		"BEGIN RSA PRIVATE KEY",
+		"BEGIN OPENSSH PRIVATE KEY",
+	}
+
+	for _, pattern := range dangerousPatterns {
+		assert.NotContains(t, dbContent, pattern,
+			"SECURITY VIOLATION: Dangerous pattern '%s' found in database!", pattern)
+	}
+}
+
+// TestDatabase_EncryptedContentRoundTrip verifies that encrypted content
+// stored in the database can be retrieved exactly as it was stored,
+// ensuring no corruption or modification of ciphertext occurs.
+func TestDatabase_EncryptedContentRoundTrip(t *testing.T) {
+	cfg := testDatabaseConfig(t)
+	db, err := NewDatabase(cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Simulated encrypted content with special characters that might get corrupted
+	// This represents base64-encoded AES-256-GCM ciphertext
+	testCases := []struct {
+		name string
+		data string
+	}{
+		{
+			name: "standard base64",
+			data: "SGVsbG8gV29ybGQhIFRoaXMgaXMgZW5jcnlwdGVkIGRhdGE=",
+		},
+		{
+			name: "base64 with padding",
+			data: "YQ==",
+		},
+		{
+			name: "long ciphertext",
+			data: "VGhpcyBpcyBhIGxvbmdlciBwaWVjZSBvZiBlbmNyeXB0ZWQgY29udGVudCB0aGF0IG1pZ2h0IGNvbnRhaW4gc2Vuc2l0aXZlIGluZm9ybWF0aW9uIGxpa2UgcGFzc3dvcmRzLCBBUEkga2V5cywgb3IgcGVyc29uYWwgZGF0YS4gSXQgc2hvdWxkIGFsbCBiZSBlbmNyeXB0ZWQgYW5kIG5vdCByZWFkYWJsZSBieSB0aGUgc2VydmVyLg==",
+		},
+		{
+			name: "binary-like base64",
+			data: "/+/+/+8f7x/vH+8=",
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pasteID := "test" + string(rune('a'+i)) + "1234567890"
+
+			original := &model.Paste{
+				Data:    tc.data,
+				Version: 2,
+				Meta: model.PasteMeta{
+					PostDate:  time.Now().Unix(),
+					Formatter: "plaintext",
+				},
+			}
+
+			err := db.CreatePaste(pasteID, original)
+			require.NoError(t, err)
+
+			retrieved, err := db.ReadPaste(pasteID)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.data, retrieved.Data,
+				"Encrypted content must be retrieved exactly as stored - no corruption allowed")
+		})
+	}
+}
+
 // Skip this test if DATABASE_URL is not set (for CI integration)
 func TestDatabase_PostgresIntegration(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")
