@@ -301,6 +301,41 @@ open http://localhost:8080
 - Table-driven tests for comprehensive coverage
 - Custom error types for domain errors (`internal/model/errors.go`)
 - Paste IDs: 16 lowercase hexadecimal characters (a-f, 0-9)
+- Always use commitlint-styled commit messages (conventional commits)
+
+## Commit Message Format
+
+Use conventional commits format for semantic-release compatibility:
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types:**
+- `feat`: New feature (minor version bump)
+- `fix`: Bug fix (patch version bump)
+- `docs`: Documentation only
+- `style`: Code style (formatting, semicolons, etc.)
+- `refactor`: Code change that neither fixes a bug nor adds a feature
+- `perf`: Performance improvement
+- `test`: Adding or updating tests
+- `build`: Build system or external dependencies
+- `ci`: CI configuration files and scripts
+- `chore`: Other changes that don't modify src or test files
+
+**Breaking changes:** Add `!` after type or include `BREAKING CHANGE:` in footer for major version bump.
+
+**Examples:**
+```bash
+feat: add password strength indicator
+fix(handler): prevent nil pointer on empty request
+docs: update API reference
+feat!: redesign encryption format
+```
 
 ## Security Notes
 
