@@ -884,3 +884,273 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestGetClientIP tests the client IP extraction logic.
+func TestGetClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		header     string
+		headerVal  string
+		expected   string
+	}{
+		{
+			name:       "IPv4 with port",
+			remoteAddr: "192.168.1.100:8080",
+			header:     "",
+			expected:   "192.168.1.100",
+		},
+		{
+			name:       "IPv4 without port",
+			remoteAddr: "192.168.1.100",
+			header:     "",
+			expected:   "192.168.1.100",
+		},
+		{
+			name:       "IPv6 localhost with brackets",
+			remoteAddr: "[::1]:8080",
+			header:     "",
+			expected:   "::1",
+		},
+		{
+			name:       "X-Forwarded-For header",
+			remoteAddr: "127.0.0.1:8080",
+			header:     "X-Forwarded-For",
+			headerVal:  "203.0.113.195",
+			expected:   "203.0.113.195",
+		},
+		{
+			name:       "X-Forwarded-For multiple IPs",
+			remoteAddr: "127.0.0.1:8080",
+			header:     "X-Forwarded-For",
+			headerVal:  "203.0.113.195, 70.41.3.18, 150.172.238.178",
+			expected:   "203.0.113.195",
+		},
+		{
+			name:       "X-Forwarded-For with spaces",
+			remoteAddr: "127.0.0.1:8080",
+			header:     "X-Forwarded-For",
+			headerVal:  "  203.0.113.195  ",
+			expected:   "203.0.113.195",
+		},
+		{
+			name:       "Custom header empty falls back",
+			remoteAddr: "10.0.0.1:1234",
+			header:     "X-Real-IP",
+			headerVal:  "",
+			expected:   "10.0.0.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			if tt.header != "" && tt.headerVal != "" {
+				req.Header.Set(tt.header, tt.headerVal)
+			}
+
+			got := getClientIP(req, tt.header)
+			if got != tt.expected {
+				t.Errorf("getClientIP() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCheckRateLimit tests the rate limiting logic.
+func TestCheckRateLimit(t *testing.T) {
+	t.Run("rate limiting disabled", func(t *testing.T) {
+		h, _ := newTestHandler(t)
+		h.config.Traffic.Limit = 0 // Disabled
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.RemoteAddr = "192.168.1.1:1234"
+
+		err := h.checkRateLimit(req)
+		if err != nil {
+			t.Errorf("expected no error when rate limiting disabled, got %v", err)
+		}
+	})
+
+	t.Run("first request allowed", func(t *testing.T) {
+		h, _ := newTestHandler(t)
+		h.config.Traffic.Limit = 10 // 10 seconds between requests
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.RemoteAddr = "192.168.1.2:1234"
+
+		err := h.checkRateLimit(req)
+		if err != nil {
+			t.Errorf("expected first request to be allowed, got %v", err)
+		}
+	})
+
+	t.Run("second request rate limited", func(t *testing.T) {
+		h, _ := newTestHandler(t)
+		h.config.Traffic.Limit = 300 // 5 minutes between requests
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.RemoteAddr = "192.168.1.3:1234"
+
+		// First request
+		err := h.checkRateLimit(req)
+		if err != nil {
+			t.Errorf("first request should be allowed, got %v", err)
+		}
+
+		// Second immediate request should be rate limited
+		err = h.checkRateLimit(req)
+		if err != model.ErrRateLimited {
+			t.Errorf("expected ErrRateLimited, got %v", err)
+		}
+	})
+
+	t.Run("exempted IP allowed", func(t *testing.T) {
+		h, _ := newTestHandler(t)
+		h.config.Traffic.Limit = 10
+		h.config.Traffic.Exempted = []string{"192.168.1.4"}
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.RemoteAddr = "192.168.1.4:1234"
+
+		// Should always be allowed
+		err := h.checkRateLimit(req)
+		if err != nil {
+			t.Errorf("exempted IP should be allowed, got %v", err)
+		}
+
+		err = h.checkRateLimit(req)
+		if err != nil {
+			t.Errorf("exempted IP should always be allowed, got %v", err)
+		}
+	})
+}
+
+// TestTrimSpace tests the custom trimSpace function.
+func TestTrimSpace(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "hello"},
+		{"  hello", "hello"},
+		{"hello  ", "hello"},
+		{"  hello  ", "hello"},
+		{"\thello\t", "hello"},
+		{" \t hello \t ", "hello"},
+		{"", ""},
+		{"   ", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := trimSpace(tt.input)
+			if got != tt.expected {
+				t.Errorf("trimSpace(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestParseIntStr tests the custom integer parsing function.
+func TestParseIntStr(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+		ok       bool
+	}{
+		{"0", 0, true},
+		{"1", 1, true},
+		{"123", 123, true},
+		{"1234567890", 1234567890, true},
+		{"abc", 0, false},
+		{"12abc", 0, false},
+		{"-1", 0, false}, // negative not supported
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var result int64
+			ok, _ := parseIntStr(tt.input, &result)
+			if ok != tt.ok {
+				t.Errorf("parseIntStr(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && result != tt.expected {
+				t.Errorf("parseIntStr(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFormatInt tests the custom integer formatting function.
+func TestFormatInt(t *testing.T) {
+	tests := []struct {
+		input    int64
+		expected string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{123, "123"},
+		{1234567890, "1234567890"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			got := formatInt(tt.input)
+			if got != tt.expected {
+				t.Errorf("formatInt(%d) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLastIndexOf tests the lastIndexOf helper function.
+func TestLastIndexOf(t *testing.T) {
+	tests := []struct {
+		s        string
+		c        byte
+		expected int
+	}{
+		{"hello", 'l', 3},
+		{"hello", 'o', 4},
+		{"hello", 'h', 0},
+		{"hello", 'x', -1},
+		{"", 'a', -1},
+		{"a:b:c", ':', 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.s, func(t *testing.T) {
+			got := lastIndexOf(tt.s, tt.c)
+			if got != tt.expected {
+				t.Errorf("lastIndexOf(%q, %c) = %d, want %d", tt.s, tt.c, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCountByte tests the countByte helper function.
+func TestCountByte(t *testing.T) {
+	tests := []struct {
+		s        string
+		c        byte
+		expected int
+	}{
+		{"hello", 'l', 2},
+		{"hello", 'o', 1},
+		{"hello", 'x', 0},
+		{"", 'a', 0},
+		{"::::", ':', 4},
+		{"::1", ':', 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.s, func(t *testing.T) {
+			got := countByte(tt.s, tt.c)
+			if got != tt.expected {
+				t.Errorf("countByte(%q, %c) = %d, want %d", tt.s, tt.c, got, tt.expected)
+			}
+		})
+	}
+}
