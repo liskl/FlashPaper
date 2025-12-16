@@ -13,6 +13,8 @@ A zero-knowledge encrypted pastebin written in Go. A complete reimplementation o
 - **Multiple Storage Backends**: SQLite, PostgreSQL, MySQL, or filesystem.
 - **Single Binary**: Self-contained with embedded frontend assets.
 - **Docker Ready**: Production and development Docker configurations included.
+- **Dark/Light Mode**: Theme toggle with localStorage persistence.
+- **Paste Actions**: Clone, Raw view, Copy URL, and Delete buttons.
 
 ## Quick Start
 

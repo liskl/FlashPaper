@@ -228,12 +228,12 @@ CGO_ENABLED=1 go test -race ./...
 
 | Package | Coverage |
 |---------|----------|
-| internal/model | 91.3% |
+| internal/middleware | 100.0% |
+| internal/model | 98.6% |
 | internal/util | 90.7% |
+| internal/handler | 86.0% |
 | internal/config | 82.0% |
-| internal/handler | 59.6% |
-| internal/storage | 40.8% |
-| **Total** | **52.9%** |
+| internal/storage | 60.1% |
 
 ### Handler Test Examples
 
@@ -290,6 +290,8 @@ open http://localhost:8080
 - View: Decrypts client-side using key from URL fragment
 - Delete: Available after viewing if you created the paste (uses sessionStorage for token)
 - Clone: Copy paste content to create a new paste
+- Raw: Open plain text content in a new browser tab
+- Copy URL: Copy the full paste URL (with decryption key) to clipboard
 
 ## Code Style
 
