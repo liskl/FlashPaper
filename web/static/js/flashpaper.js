@@ -113,7 +113,7 @@ const FlashPaper = (function() {
         // Clone paste
         document.getElementById('clone-paste')?.addEventListener('click', clonePaste);
 
-        // Copy URL
+        // Copy URL (now a button instead of anchor)
         document.getElementById('paste-url')?.addEventListener('click', copyUrl);
 
         // Delete paste
@@ -653,7 +653,7 @@ const FlashPaper = (function() {
      * Copy paste URL to clipboard
      */
     async function copyUrl(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
         try {
             await navigator.clipboard.writeText(window.location.href);
             showAlert('URL copied to clipboard', 'success');

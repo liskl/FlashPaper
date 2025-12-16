@@ -86,17 +86,22 @@ body {
 
 /* Header */
 header {
-    text-align: center;
-    padding: var(--spacing-xl) 0;
+    padding: var(--spacing-lg) 0;
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: var(--spacing-xl);
-    position: relative;
+    margin-bottom: var(--spacing-lg);
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-xs);
 }
 
 header h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    margin-bottom: var(--spacing-sm);
+    margin: 0;
 }
 
 header h1 a {
@@ -109,41 +114,26 @@ header h1 a:hover {
     color: var(--text-primary);
 }
 
-.tagline {
-    color: var(--text-secondary);
-    font-size: 1rem;
-}
-
-/* Theme Toggle Button */
-.theme-toggle {
-    position: absolute;
-    top: var(--spacing-md);
-    right: 0;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-sm) var(--spacing-md);
-    cursor: pointer;
+.header-actions {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+}
+
+.tagline {
+    color: var(--text-secondary);
     font-size: 0.875rem;
-    color: var(--text-primary);
-    transition: all var(--transition-fast);
+    margin: 0;
 }
 
-.theme-toggle:hover {
-    background: var(--border-color);
-    border-color: var(--text-muted);
-}
-
-.theme-toggle:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.25);
+/* Small button variant */
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.8125rem;
 }
 
 .theme-toggle-icon {
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1;
 }
 
@@ -151,9 +141,6 @@ header h1 a:hover {
 @media (max-width: 480px) {
     .theme-toggle-text {
         display: none;
-    }
-    .theme-toggle {
-        padding: var(--spacing-sm);
     }
 }
 
@@ -175,24 +162,70 @@ main {
 
 /* Toolbar */
 .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-md);
     padding-bottom: var(--spacing-md);
     border-bottom: 1px solid var(--border-color);
     margin-bottom: var(--spacing-md);
 }
 
+.toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
 .toolbar-group {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
 }
 
-.toolbar-group label {
+.toolbar-group > label {
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     white-space: nowrap;
+}
+
+/* Checkbox label styling */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin: 0;
+}
+
+/* Toolbar password group */
+.toolbar-password {
+    margin-left: auto;
+}
+
+.toolbar-password input {
+    width: 120px;
+}
+
+/* Toolbar send button */
+.toolbar-send {
+    margin-left: var(--spacing-sm);
+}
+
+/* Paste meta info in toolbar */
+.paste-meta {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    gap: var(--spacing-md);
+}
+
+/* Toolbar actions (right-aligned) */
+.toolbar-actions {
+    margin-left: auto;
+    gap: var(--spacing-xs);
 }
 
 /* Form elements */
@@ -201,8 +234,8 @@ select, input[type="text"], input[type="password"] {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: 0.875rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.8125rem;
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-normal);
 }
 
@@ -213,10 +246,22 @@ select:focus, input[type="text"]:focus, input[type="password"]:focus {
 }
 
 input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
+    width: 0.875rem;
+    height: 0.875rem;
     accent-color: var(--accent-primary);
     cursor: pointer;
+}
+
+/* Password form (for decryption prompt) */
+.password-form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.password-form input {
+    width: 200px;
 }
 
 /* Textarea */
@@ -245,7 +290,7 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
-/* Actions bar */
+/* Actions bar (legacy, kept for compatibility) */
 .actions {
     display: flex;
     flex-wrap: wrap;
@@ -253,6 +298,11 @@ textarea::placeholder {
     margin-top: var(--spacing-md);
     padding-top: var(--spacing-md);
     border-top: 1px solid var(--border-color);
+}
+
+/* Hide empty actions bar */
+.actions:empty {
+    display: none;
 }
 
 /* Buttons */
@@ -544,33 +594,52 @@ footer a:hover {
     }
 
     header {
-        padding: var(--spacing-lg) 0;
-        padding-top: calc(var(--spacing-lg) + 2.5rem); /* Space for theme toggle */
+        padding: var(--spacing-md) 0;
     }
 
     header h1 {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
     }
 
-    .theme-toggle {
-        top: var(--spacing-sm);
+    .tagline {
+        font-size: 0.75rem;
     }
 
-    .toolbar {
+    .toolbar-row {
         flex-direction: column;
         align-items: stretch;
+        gap: var(--spacing-sm);
     }
 
     .toolbar-group {
         justify-content: space-between;
     }
 
-    .actions {
-        flex-direction: column;
+    .toolbar-password {
+        margin-left: 0;
     }
 
-    .btn {
+    .toolbar-password input {
+        flex: 1;
+    }
+
+    .toolbar-send {
+        margin-left: 0;
+    }
+
+    .toolbar-send .btn {
         width: 100%;
+    }
+
+    .toolbar-actions {
+        margin-left: 0;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .paste-meta {
+        flex-direction: column;
+        gap: var(--spacing-xs);
     }
 
     textarea {
@@ -580,11 +649,6 @@ footer a:hover {
     #burn-warning {
         flex-direction: column;
         text-align: center;
-    }
-
-    .paste-info {
-        flex-direction: column;
-        gap: var(--spacing-xs);
     }
 }
 

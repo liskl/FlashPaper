@@ -10,11 +10,16 @@
 <body>
     <div class="container">
         <header>
-            <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
-                <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
-                <span class="theme-toggle-text" id="theme-text">Dark</span>
-            </button>
-            <h1><a href="/">{{.Name}}</a></h1>
+            <div class="header-row">
+                <h1><a href="/">{{.Name}}</a></h1>
+                <div class="header-actions">
+                    <a href="/" class="btn btn-sm" id="new-paste-btn">New</a>
+                    <button id="theme-toggle" class="btn btn-sm" aria-label="Toggle dark mode">
+                        <span class="theme-toggle-icon" id="theme-icon">&#9790;</span>
+                        <span class="theme-toggle-text" id="theme-text">Dark</span>
+                    </button>
+                </div>
+            </div>
             <p class="tagline">Zero-knowledge encrypted pastebin</p>
         </header>
 
@@ -26,56 +31,70 @@
             <!-- New paste form (shown when no paste ID) -->
             <div id="new-paste" class="panel">
                 <div class="toolbar">
-                    <div class="toolbar-group">
-                        <label for="expire">Expires:</label>
-                        <select id="expire">
-                            <option value="5min">5 minutes</option>
-                            <option value="10min">10 minutes</option>
-                            <option value="1hour">1 hour</option>
-                            <option value="1day">1 day</option>
-                            <option value="1week" selected>1 week</option>
-                            <option value="1month">1 month</option>
-                            <option value="1year">1 year</option>
-                            <option value="never">Never</option>
-                        </select>
-                    </div>
-                    <div class="toolbar-group">
-                        <label>
-                            <input type="checkbox" id="burn-after-reading">
-                            Burn after reading
-                        </label>
-                    </div>
-                    <div class="toolbar-group">
-                        <label>
-                            <input type="checkbox" id="open-discussion">
-                            Open discussion
-                        </label>
-                    </div>
-                    <div class="toolbar-group">
-                        <label for="password">Password (optional):</label>
-                        <input type="password" id="password" placeholder="Optional password">
+                    <div class="toolbar-row">
+                        <div class="toolbar-group">
+                            <label for="expire">Expires</label>
+                            <select id="expire">
+                                <option value="5min">5 min</option>
+                                <option value="10min">10 min</option>
+                                <option value="1hour">1 hour</option>
+                                <option value="1day">1 day</option>
+                                <option value="1week" selected>1 week</option>
+                                <option value="1month">1 month</option>
+                                <option value="1year">1 year</option>
+                                <option value="never">Never</option>
+                            </select>
+                        </div>
+                        <div class="toolbar-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="burn-after-reading">
+                                <span>Burn after reading</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="open-discussion">
+                                <span>Open discussion</span>
+                            </label>
+                        </div>
+                        <div class="toolbar-group toolbar-password">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" placeholder="(optional)">
+                        </div>
+                        <div class="toolbar-group toolbar-send">
+                            <button id="create-paste" class="btn btn-primary">Send</button>
+                        </div>
                     </div>
                 </div>
 
-                <textarea id="paste-content" placeholder="Paste your text here..." autofocus></textarea>
-
-                <div class="actions">
-                    <button id="create-paste" class="btn btn-primary">Create Paste</button>
-                </div>
+                <textarea id="paste-content" placeholder="Enter your text here..." autofocus></textarea>
             </div>
 
             <!-- View paste (shown when viewing a paste) -->
             <div id="view-paste" class="panel hidden">
-                <div class="paste-info">
-                    <span id="paste-date"></span>
-                    <span id="paste-status"></span>
+                <!-- Action toolbar for viewing paste -->
+                <div class="toolbar">
+                    <div class="toolbar-row">
+                        <div class="toolbar-group paste-meta">
+                            <span id="paste-date"></span>
+                            <span id="paste-status"></span>
+                        </div>
+                        <div class="toolbar-group toolbar-actions">
+                            <button id="clone-paste" class="btn btn-sm">Clone</button>
+                            <button id="raw-paste" class="btn btn-sm">Raw</button>
+                            <button id="paste-url" class="btn btn-sm">Copy URL</button>
+                            <button id="delete-paste" class="btn btn-sm btn-danger hidden">Delete</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Password prompt for encrypted pastes -->
                 <div id="password-prompt" class="hidden">
                     <p>This paste is password protected.</p>
-                    <input type="password" id="decrypt-password" placeholder="Enter password">
-                    <button id="decrypt-btn" class="btn btn-primary">Decrypt</button>
+                    <div class="password-form">
+                        <input type="password" id="decrypt-password" placeholder="Enter password">
+                        <button id="decrypt-btn" class="btn btn-primary">Decrypt</button>
+                    </div>
                 </div>
 
                 <!-- Decrypted content -->
@@ -87,13 +106,6 @@
                 <div id="burn-warning" class="alert alert-warning hidden">
                     <strong>Warning:</strong> This paste will be deleted after you view it.
                     <button id="view-burn" class="btn btn-warning">View paste</button>
-                </div>
-
-                <div class="actions">
-                    <button id="clone-paste" class="btn">Clone</button>
-                    <button id="raw-paste" class="btn">Raw</button>
-                    <button id="delete-paste" class="btn btn-danger hidden">Delete</button>
-                    <a id="paste-url" class="btn" href="#">Copy URL</a>
                 </div>
 
                 <!-- Discussion/comments section -->
