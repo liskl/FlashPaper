@@ -13,7 +13,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Force lowercase for Docker compatibility
+  IMAGE_NAME: ${{ github.repository_owner }}/flashpaper
 
 jobs:
   build:
