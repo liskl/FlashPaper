@@ -5,11 +5,11 @@ on:
     branches:
       - main
       - initial-mvp
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - main
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
