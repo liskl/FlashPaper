@@ -18,7 +18,37 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/flashpaper
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Run tests with coverage
+        uses: gwatts/go-coverage-action@v2
+        env:
+          CGO_ENABLED: 1
+        with:
+          test-args: '["-v", "-race"]'
+          cover-mode: atomic
+          coverage-threshold: 60
+          fail-coverage: always
+
   build:
+    needs: test
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
