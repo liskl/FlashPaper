@@ -2,6 +2,12 @@
 
 A zero-knowledge encrypted pastebin written in Go. A complete reimplementation of [PrivateBin](https://github.com/PrivateBin/PrivateBin) with full API compatibility.
 
+## Screenshots
+
+| Light Mode | Dark Mode |
+|------------|-----------|
+| ![Light Mode](docs/screenshot.png) | ![Dark Mode](docs/screenshot-dark.png) |
+
 ## Features
 
 - **Zero-Knowledge Encryption**: All encryption happens in your browser. The server never sees your content.
