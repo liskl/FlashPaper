@@ -113,7 +113,7 @@ flashpaper/
 ├── deploy/
 │   └── kustomize/               # Kubernetes deployment manifests
 │       ├── base/                # Base deployment and service
-│       └── overlays/dev/        # Development overlay with PostgreSQL
+│       └── overlays/dev-example/ # Example development overlay with PostgreSQL
 ├── docs/                        # Markdown documentation source
 │   ├── documentation.md         # User documentation
 │   └── implementation.md        # Technical implementation details
@@ -357,8 +357,8 @@ test (Go unit tests) → e2e-test (Playwright) → build (Docker multi-arch) →
 Kustomize manifests in `deploy/kustomize/`:
 
 ```bash
-# Deploy to Kubernetes (dev overlay with PostgreSQL)
-kubectl apply -k deploy/kustomize/overlays/dev
+# Deploy to Kubernetes (dev-example overlay with PostgreSQL)
+kubectl apply -k deploy/kustomize/overlays/dev-example
 
 # Deploy base only
 kubectl apply -k deploy/kustomize/base
@@ -366,7 +366,7 @@ kubectl apply -k deploy/kustomize/base
 
 Structure:
 - `base/` - Deployment, Service, ConfigMap
-- `overlays/dev/` - Development configuration with PostgreSQL
+- `overlays/dev-example/` - Example development configuration with PostgreSQL
 
 ## Docker
 

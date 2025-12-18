@@ -178,8 +178,8 @@ npm run test:e2e:ui
 Deploy using Kustomize:
 
 ```bash
-# Development environment (with PostgreSQL)
-kubectl apply -k deploy/kustomize/overlays/dev
+# Example development environment (with PostgreSQL)
+kubectl apply -k deploy/kustomize/overlays/dev-example
 
 # Base deployment only
 kubectl apply -k deploy/kustomize/base
