@@ -44,12 +44,23 @@ CGO_ENABLED=1 go test -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out
 
 # Using Makefile (recommended)
-make build     # Build binary
-make run       # Build and run
-make test      # Run tests
-make docker    # Build Docker image
-make up        # Start with docker-compose
-make dev       # Development with hot reload
+make build          # Build binary
+make run            # Build and run
+make test           # Run tests
+make lint           # Run linter (golangci-lint)
+make fmt            # Format code
+make docker         # Build Docker image
+make up             # Start with docker-compose
+make dev            # Development with hot reload
+make install-tools  # Install dev tools (air, golangci-lint)
+make mod-tidy       # Clean up go.mod
+make db-shell       # Open PostgreSQL shell
+
+# E2E Tests (Playwright)
+npm install                      # Install dependencies
+npx playwright install chromium  # Install browser
+npm run test:e2e                 # Run all e2e tests
+npm run test:e2e:ui              # Run with interactive UI
 ```
 
 ## Architecture
@@ -60,10 +71,10 @@ flashpaper/
 ├── internal/
 │   ├── config/                  # INI configuration parsing
 │   │   ├── config.go            # Config structs and loading
-│   │   └── config_test.go       # Config tests (82% coverage)
+│   │   └── config_test.go       # Config tests
 │   ├── handler/                 # HTTP request handlers (API endpoints)
 │   │   ├── handler.go           # Main routing, template serving
-│   │   ├── handler_test.go      # Handler tests (59.6% coverage)
+│   │   ├── handler_test.go      # Handler tests
 │   │   ├── paste.go             # Create, read, delete paste endpoints
 │   │   └── comment.go           # Comment creation, rate limiting
 │   ├── middleware/              # Security headers middleware
@@ -72,7 +83,7 @@ flashpaper/
 │   │   ├── paste.go             # Paste struct and validation
 │   │   ├── comment.go           # Comment struct and validation
 │   │   ├── errors.go            # Domain error types
-│   │   └── *_test.go            # Model tests (91.3% coverage)
+│   │   └── *_test.go            # Model tests
 │   ├── server/                  # HTTP server setup
 │   │   └── server.go            # Server configuration
 │   ├── storage/                 # Storage interface and implementations
@@ -80,18 +91,35 @@ flashpaper/
 │   │   ├── database.go          # SQLite/PostgreSQL/MySQL impl
 │   │   ├── filesystem.go        # File-based storage impl
 │   │   ├── mock.go              # Mock storage for testing
-│   │   └── *_test.go            # Storage tests (40.8% coverage)
+│   │   └── *_test.go            # Storage tests
 │   └── util/                    # Crypto, ID generation utilities
 │       ├── crypto.go            # HMAC, salt, vizhash generation
 │       ├── id.go                # Paste/comment ID generation
-│       └── *_test.go            # Util tests (90.7% coverage)
+│       └── *_test.go            # Util tests
 ├── web/
 │   ├── static/
 │   │   ├── js/flashpaper.js     # Client-side encryption, theme toggle
 │   │   └── css/style.css        # Styles with light/dark theme support
 │   └── templates/
-│       └── index.html           # Main HTML template
+│       ├── index.html           # Main HTML template
+│       ├── docs.html            # Documentation page template
+│       └── implementation.html  # How It Works page template
+├── e2e/                         # Playwright end-to-end tests
+│   ├── paste.spec.ts            # Paste CRUD and action tests
+│   ├── theme.spec.ts            # Theme toggle tests
+│   ├── burn.spec.ts             # Burn-after-reading tests
+│   ├── password.spec.ts         # Password protection tests
+│   └── navigation.spec.ts       # Navigation link tests
+├── deploy/
+│   └── kustomize/               # Kubernetes deployment manifests
+│       ├── base/                # Base deployment and service
+│       └── overlays/dev/        # Development overlay with PostgreSQL
+├── docs/                        # Markdown documentation source
+│   ├── documentation.md         # User documentation
+│   └── implementation.md        # Technical implementation details
 ├── embed.go                     # Go embed directives
+├── package.json                 # Node.js dependencies (Playwright)
+├── playwright.config.ts         # Playwright test configuration
 ├── Dockerfile                   # Multi-stage production build
 ├── docker-compose.yml           # Production stack (PostgreSQL)
 └── docker-compose.dev.yml       # Development with hot reload
@@ -133,6 +161,9 @@ flashpaper/
 | POST | `/` | Create paste or comment |
 | DELETE | `/` | Delete paste (with deletetoken) |
 | GET | `/health` | Health check |
+| GET | `/implementation` | How It Works page (technical details) |
+| GET | `/docs` | Documentation page (user guide) |
+| GET | `/js/*`, `/css/*` | Static assets (embedded) |
 
 ### Request/Response Format
 
@@ -170,20 +201,33 @@ Configuration via INI file or environment variables:
 
 ```ini
 [main]
-name = "FlashPaper"
-basepath = "/"
-discussion = true
-sizelimit = 10485760
+name = "FlashPaper"              # Instance name shown in UI
+basepath = "/"                   # URL base path
+discussion = true                # Enable threaded comments
+sizelimit = 10485760             # Max paste size in bytes (10MB)
+burnafterreadingselected = false # Default burn checkbox state
+opendiscussion = true            # Allow discussions without password
+formatter = "plaintext"          # Default: plaintext, syntaxhighlighting, markdown
+password = true                  # Enable password protection feature
+fileupload = false               # Enable file attachments (not implemented)
+icon = "identicon"               # Comment icons: identicon, vizhash, none
 
 [expire]
-default = "1week"
+default = "1week"                # Default expiration
 
 [traffic]
-limit = 10
+limit = 10                       # Seconds between paste creations (rate limit)
+header = "X-Forwarded-For"       # Header for real IP (X-Forwarded-For, X-Real-IP, CF-Connecting-IP)
+exempted = ""                    # Comma-separated IPs exempt from rate limiting
+creators = ""                    # Whitelist of IPs allowed to create pastes (empty = all)
+
+[purge]
+limit = 300                      # Minimum seconds between purge runs
+batchsize = 10                   # Number of expired pastes to delete per run
 
 [model]
-class = "Database"
-dsn = "/data/flashpaper.db"
+class = "Database"               # Storage backend: Database, Filesystem
+dsn = "/data/flashpaper.db"      # Connection string (see Storage Backends)
 ```
 
 Environment variable format: `FLASHPAPER_SECTION_KEY`
@@ -260,6 +304,69 @@ if rr.Code != http.StatusOK {
     t.Errorf("expected 200, got %d", rr.Code)
 }
 ```
+
+## E2E Testing
+
+Playwright tests for browser-based end-to-end testing in `e2e/` directory:
+
+```bash
+# Install dependencies
+npm install
+
+# Install Chromium browser
+npx playwright install chromium
+
+# Run all e2e tests
+npm run test:e2e
+
+# Run with interactive UI mode
+npm run test:e2e:ui
+```
+
+### E2E Test Coverage (36 tests)
+
+| Test File | Coverage |
+|-----------|----------|
+| `paste.spec.ts` | Paste creation, viewing, clone, raw, copy URL, delete |
+| `theme.spec.ts` | Theme toggle, localStorage persistence |
+| `burn.spec.ts` | Burn-after-reading flow, 404 on second access |
+| `password.spec.ts` | Password protection, decryption prompts |
+| `navigation.spec.ts` | Navigation between /implementation and /docs pages |
+
+## CI/CD
+
+GitHub Actions workflows in `.github/workflows/`:
+
+**docker.yml** - Build and Push Pipeline:
+```
+test (Go unit tests) → e2e-test (Playwright) → build (Docker multi-arch) → merge (manifest)
+```
+- Runs on push to main, tags, PRs, and manual dispatch
+- Coverage threshold: 60% minimum enforced
+- Multi-arch builds: linux/amd64, linux/arm64
+- Images pushed to ghcr.io
+
+**release.yml** - Semantic Release:
+- Automatic versioning via conventional commits
+- Changelog generation
+- GitHub release creation
+- Triggers Docker build on new release
+
+## Kubernetes Deployment
+
+Kustomize manifests in `deploy/kustomize/`:
+
+```bash
+# Deploy to Kubernetes (dev overlay with PostgreSQL)
+kubectl apply -k deploy/kustomize/overlays/dev
+
+# Deploy base only
+kubectl apply -k deploy/kustomize/base
+```
+
+Structure:
+- `base/` - Deployment, Service, ConfigMap
+- `overlays/dev/` - Development configuration with PostgreSQL
 
 ## Docker
 
@@ -345,4 +452,46 @@ feat!: redesign encryption format
 - Server salt is base64-encoded and stored in database
 - Rate limiting by IP hash (configurable)
 - Security headers set via middleware (CSP, X-Frame-Options, etc.)
-- always run tests or validate improvements before commiting.
+- Always run tests or validate improvements before committing
+
+### Security Headers (Middleware)
+
+The `internal/middleware/security.go` sets these headers on all responses:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Frame-Options` | `DENY` | Prevent clickjacking |
+| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
+| `Referrer-Policy` | `no-referrer` | Don't leak URLs |
+| `Content-Security-Policy` | (strict policy) | XSS protection |
+
+### Burn-After-Reading
+
+Burn-after-reading pastes have special behavior:
+
+- **URL Format**: Fragment uses dash prefix: `#-{key}` instead of `#{key}`
+- **Warning Modal**: Shows confirmation before revealing content
+- **Mutual Exclusion**: Discussions are disabled when burn is enabled
+- **Delete on View**: Paste is deleted from server after first decryption
+- **E2E Tested**: Second access returns 404
+
+## Error Handling
+
+Custom error types in `internal/model/errors.go`:
+
+| Error | Description |
+|-------|-------------|
+| `ErrPasteNotFound` | Paste ID doesn't exist |
+| `ErrInvalidPasteID` | Malformed paste ID (must be 16 hex chars) |
+| `ErrPasteExpired` | Paste has passed expiration time |
+| `ErrInvalidRequest` | Malformed JSON or missing fields |
+
+API error response format:
+```json
+{
+  "status": 1,
+  "message": "Paste not found"
+}
+```
+
+Status codes: `0` = success, `1` = error
