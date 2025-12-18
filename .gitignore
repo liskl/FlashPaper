@@ -26,3 +26,9 @@ config.ini
 tmp/
 *.tmp
 *.log
+
+# Node.js / Playwright
+node_modules/
+playwright-report/
+test-results/
+.playwright/
