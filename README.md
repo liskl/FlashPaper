@@ -21,6 +21,8 @@ A zero-knowledge encrypted pastebin written in Go. A complete reimplementation o
 - **Docker Ready**: Production and development Docker configurations included.
 - **Dark/Light Mode**: Theme toggle with localStorage persistence.
 - **Paste Actions**: Clone, Raw view, Copy URL, and Delete buttons.
+- **CI/CD**: GitHub Actions for testing, building, and releases.
+- **Kubernetes Ready**: Kustomize manifests for easy deployment.
 
 ## Quick Start
 
@@ -139,12 +141,54 @@ make install-tools
 # Run with hot reload
 make dev
 
-# Run tests
-make test
-
 # Build Docker image
 make docker
 ```
+
+## Testing
+
+### Unit Tests
+
+```bash
+# Run all Go tests
+make test
+
+# With coverage report
+CGO_ENABLED=1 go test -cover ./...
+```
+
+### E2E Tests (Playwright)
+
+```bash
+# Install Playwright
+npm install
+npx playwright install chromium
+
+# Run tests
+npm run test:e2e
+
+# Interactive UI mode
+npm run test:e2e:ui
+```
+
+36 end-to-end tests covering paste operations, theme toggle, burn-after-reading, password protection, and navigation.
+
+## Kubernetes
+
+Deploy using Kustomize:
+
+```bash
+# Example development environment (with PostgreSQL)
+kubectl apply -k deploy/kustomize/overlays/dev-example
+
+# Base deployment only
+kubectl apply -k deploy/kustomize/base
+```
+
+## Documentation
+
+- **[How It Works](/implementation)** - Technical implementation details
+- **[Documentation](/docs)** - User guide and API reference
 
 ## License
 
