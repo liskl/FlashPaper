@@ -156,6 +156,7 @@
                         <li><a href="#api">5. API Protocol</a></li>
                         <li><a href="#security">6. Security Analysis</a></li>
                         <li><a href="#threat-model">7. Threat Model</a></li>
+                        <li><a href="#observability">8. Observability</a></li>
                     </ul>
                 </nav>
 
@@ -504,6 +505,133 @@ crypto.getRandomValues(masterKey);</code></pre>
                     <li>Automatic expiration limits exposure window</li>
                 </ul>
 
+                <h2 id="observability">8. Observability</h2>
+
+                <p>
+                    FlashPaper implements distributed tracing via OpenTelemetry (OTEL), enabling comprehensive
+                    visibility into request flows, performance characteristics, and system behavior in production
+                    environments.
+                </p>
+
+                <h3>8.1 Tracing Architecture</h3>
+                <p>
+                    The observability layer follows a layered instrumentation approach, with traces propagating
+                    from HTTP middleware through handlers to the storage layer:
+                </p>
+
+                <div class="diagram">┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Request Flow with Tracing                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌───────────┐  │
+│  │   Client    │───►│ OTEL HTTP    │───►│   Handler    │───►│  Storage  │  │
+│  │             │    │  Middleware  │    │   (Spans)    │    │  (Spans)  │  │
+│  └─────────────┘    └──────────────┘    └──────────────┘    └───────────┘  │
+│                            │                   │                   │        │
+│                            ▼                   ▼                   ▼        │
+│                     ┌─────────────────────────────────────────────────┐     │
+│                     │              OTLP/gRPC Exporter                 │     │
+│                     │         (Jaeger, Zipkin, OTEL Collector)        │     │
+│                     └─────────────────────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+
+                <h3>8.2 Instrumentation Points</h3>
+                <table>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Span Name</th>
+                        <th>Key Attributes</th>
+                    </tr>
+                    <tr>
+                        <td>HTTP Middleware</td>
+                        <td><code>GET /</code>, <code>POST /</code></td>
+                        <td><code>http.method</code>, <code>http.route</code>, <code>http.status_code</code></td>
+                    </tr>
+                    <tr>
+                        <td>Handler - Create</td>
+                        <td><code>Handler.createPaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Handler - Read</td>
+                        <td><code>Handler.getPaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Handler - Delete</td>
+                        <td><code>Handler.deletePaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Storage - Create</td>
+                        <td><code>Storage.CreatePaste</code></td>
+                        <td><code>db.system</code>, <code>db.operation</code></td>
+                    </tr>
+                    <tr>
+                        <td>Storage - Read</td>
+                        <td><code>Storage.ReadPaste</code></td>
+                        <td><code>db.system</code>, <code>db.operation</code></td>
+                    </tr>
+                </table>
+
+                <h3>8.3 Trace Context Propagation</h3>
+                <p>
+                    Traces propagate through the system using Go's <code>context.Context</code>:
+                </p>
+
+                <pre><code>// Handler creates spans for business logic
+ctx, span := h.tracer.Start(r.Context(), "Handler.createPaste")
+defer span.End()
+
+// Storage layer continues the trace
+ctx, span := s.tracer.Start(ctx, "Storage.CreatePaste")
+defer span.End()</code></pre>
+
+                <h3>8.4 Configuration</h3>
+                <p>
+                    OpenTelemetry is configured via INI file or environment variables:
+                </p>
+
+                <table>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Description</th>
+                        <th>Default</th>
+                    </tr>
+                    <tr>
+                        <td><code>FLASHPAPER_OTEL_ENABLED</code></td>
+                        <td>Enable/disable tracing</td>
+                        <td><code>false</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>FLASHPAPER_OTEL_ENDPOINT</code></td>
+                        <td>OTLP gRPC collector endpoint</td>
+                        <td><code>localhost:4317</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>FLASHPAPER_OTEL_SERVICENAME</code></td>
+                        <td>Service name in traces</td>
+                        <td><code>flashpaper</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>FLASHPAPER_OTEL_ENVIRONMENT</code></td>
+                        <td>Deployment environment tag</td>
+                        <td><code>development</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>FLASHPAPER_OTEL_SAMPLERATE</code></td>
+                        <td>Trace sampling rate (0.0-1.0)</td>
+                        <td><code>1.0</code></td>
+                    </tr>
+                </table>
+
+                <div class="note">
+                    <strong>Performance Note:</strong> Production deployments may reduce <code>samplerate</code>
+                    below 1.0 to minimize overhead. The OTLP exporter batches spans before transmission to
+                    reduce network calls.
+                </div>
+
                 <h2>References</h2>
                 <ul>
                     <li>NIST SP 800-38D: Recommendation for Block Cipher Modes of Operation: Galois/Counter Mode (GCM)</li>
@@ -511,6 +639,7 @@ crypto.getRandomValues(masterKey);</code></pre>
                     <li>RFC 3986: Uniform Resource Identifier (URI): Generic Syntax</li>
                     <li>OWASP Password Storage Cheat Sheet</li>
                     <li>Web Crypto API Specification (W3C)</li>
+                    <li>OpenTelemetry Specification</li>
                 </ul>
             </div>
         </main>

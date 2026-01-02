@@ -322,3 +322,201 @@ func TestConfig_ValidStorageClasses(t *testing.T) {
 		})
 	}
 }
+
+// OpenTelemetry config tests
+
+func TestDefaultConfig_OtelDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// OTEL should be disabled by default
+	assert.False(t, cfg.Otel.Enabled)
+	assert.Equal(t, "localhost:4317", cfg.Otel.Endpoint)
+	assert.Equal(t, "flashpaper", cfg.Otel.ServiceName)
+	assert.Equal(t, "development", cfg.Otel.Environment)
+	assert.True(t, cfg.Otel.Insecure)
+	assert.Equal(t, 1.0, cfg.Otel.SampleRate)
+}
+
+func TestLoad_OtelFromFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.ini")
+
+	content := `
+[otel]
+enabled = true
+endpoint = collector.example.com:4317
+servicename = my-flashpaper
+environment = production
+insecure = false
+samplerate = 0.5
+`
+	err := os.WriteFile(configPath, []byte(content), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Otel.Enabled)
+	assert.Equal(t, "collector.example.com:4317", cfg.Otel.Endpoint)
+	assert.Equal(t, "my-flashpaper", cfg.Otel.ServiceName)
+	assert.Equal(t, "production", cfg.Otel.Environment)
+	assert.False(t, cfg.Otel.Insecure)
+	assert.Equal(t, 0.5, cfg.Otel.SampleRate)
+}
+
+func TestLoad_OtelEnvOverrides(t *testing.T) {
+	// Set environment variables for OTEL config
+	os.Setenv("FLASHPAPER_OTEL_ENABLED", "true")
+	os.Setenv("FLASHPAPER_OTEL_ENDPOINT", "otel-collector:4317")
+	os.Setenv("FLASHPAPER_OTEL_SERVICENAME", "env-flashpaper")
+	os.Setenv("FLASHPAPER_OTEL_ENVIRONMENT", "staging")
+	os.Setenv("FLASHPAPER_OTEL_INSECURE", "true")
+	os.Setenv("FLASHPAPER_OTEL_SAMPLERATE", "0.25")
+	defer func() {
+		os.Unsetenv("FLASHPAPER_OTEL_ENABLED")
+		os.Unsetenv("FLASHPAPER_OTEL_ENDPOINT")
+		os.Unsetenv("FLASHPAPER_OTEL_SERVICENAME")
+		os.Unsetenv("FLASHPAPER_OTEL_ENVIRONMENT")
+		os.Unsetenv("FLASHPAPER_OTEL_INSECURE")
+		os.Unsetenv("FLASHPAPER_OTEL_SAMPLERATE")
+	}()
+
+	cfg, err := Load("/nonexistent/config.ini")
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Otel.Enabled)
+	assert.Equal(t, "otel-collector:4317", cfg.Otel.Endpoint)
+	assert.Equal(t, "env-flashpaper", cfg.Otel.ServiceName)
+	assert.Equal(t, "staging", cfg.Otel.Environment)
+	assert.True(t, cfg.Otel.Insecure)
+	assert.Equal(t, 0.25, cfg.Otel.SampleRate)
+}
+
+func TestLoad_OtelStandardEnvVars(t *testing.T) {
+	// Test standard OTEL environment variables
+	os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://standard-collector:4317")
+	os.Setenv("OTEL_SERVICE_NAME", "standard-service")
+	defer func() {
+		os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+		os.Unsetenv("OTEL_SERVICE_NAME")
+	}()
+
+	cfg, err := Load("/nonexistent/config.ini")
+	require.NoError(t, err)
+
+	assert.Equal(t, "http://standard-collector:4317", cfg.Otel.Endpoint)
+	assert.Equal(t, "standard-service", cfg.Otel.ServiceName)
+}
+
+func TestLoad_OtelFileOverridesDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.ini")
+
+	// Only set a few values in file
+	content := `
+[otel]
+enabled = true
+endpoint = custom-endpoint:4317
+`
+	err := os.WriteFile(configPath, []byte(content), 0644)
+	require.NoError(t, err)
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// File values should be set
+	assert.True(t, cfg.Otel.Enabled)
+	assert.Equal(t, "custom-endpoint:4317", cfg.Otel.Endpoint)
+
+	// Defaults should remain for unset values
+	assert.Equal(t, "flashpaper", cfg.Otel.ServiceName)
+	assert.Equal(t, "development", cfg.Otel.Environment)
+	assert.True(t, cfg.Otel.Insecure)
+	assert.Equal(t, 1.0, cfg.Otel.SampleRate)
+}
+
+func TestLoad_OtelEnvOverridesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.ini")
+
+	content := `
+[otel]
+enabled = false
+endpoint = file-endpoint:4317
+servicename = file-service
+`
+	err := os.WriteFile(configPath, []byte(content), 0644)
+	require.NoError(t, err)
+
+	// Set environment variables that should override
+	os.Setenv("FLASHPAPER_OTEL_ENABLED", "true")
+	os.Setenv("FLASHPAPER_OTEL_ENDPOINT", "env-endpoint:4317")
+	defer func() {
+		os.Unsetenv("FLASHPAPER_OTEL_ENABLED")
+		os.Unsetenv("FLASHPAPER_OTEL_ENDPOINT")
+	}()
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	// Environment should override file
+	assert.True(t, cfg.Otel.Enabled)
+	assert.Equal(t, "env-endpoint:4317", cfg.Otel.Endpoint)
+
+	// File value should remain for servicename (not overridden)
+	assert.Equal(t, "file-service", cfg.Otel.ServiceName)
+}
+
+func TestLoad_OtelBooleanParsing(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{"true", "true", true},
+		{"false", "false", false},
+		{"1", "1", true},
+		{"0", "0", false},
+		{"yes", "yes", true},
+		{"no", "no", false},
+		{"TRUE", "TRUE", true},
+		{"FALSE", "FALSE", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("FLASHPAPER_OTEL_ENABLED", tt.value)
+			defer os.Unsetenv("FLASHPAPER_OTEL_ENABLED")
+
+			cfg, err := Load("/nonexistent/config.ini")
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, cfg.Otel.Enabled)
+		})
+	}
+}
+
+func TestLoad_OtelSampleRateBounds(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected float64
+	}{
+		{"zero", "0", 0.0},
+		{"half", "0.5", 0.5},
+		{"full", "1.0", 1.0},
+		{"quarter", "0.25", 0.25},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("FLASHPAPER_OTEL_SAMPLERATE", tt.value)
+			defer os.Unsetenv("FLASHPAPER_OTEL_SAMPLERATE")
+
+			cfg, err := Load("/nonexistent/config.ini")
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, cfg.Otel.SampleRate)
+		})
+	}
+}

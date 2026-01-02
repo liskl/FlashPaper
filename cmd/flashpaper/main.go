@@ -17,9 +17,12 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/liskl/flashpaper/internal/config"
 	"github.com/liskl/flashpaper/internal/server"
 	"github.com/liskl/flashpaper/internal/storage"
+	"github.com/liskl/flashpaper/internal/telemetry"
 )
 
 // Version information set at build time via ldflags:
@@ -48,6 +51,29 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Initialize OpenTelemetry tracing if enabled
+	var tp trace.TracerProvider
+	var otelProvider *telemetry.Provider
+	if cfg.Otel.Enabled {
+		ctx := context.Background()
+		otelCfg := telemetry.Config{
+			Enabled:     cfg.Otel.Enabled,
+			Endpoint:    cfg.Otel.Endpoint,
+			ServiceName: cfg.Otel.ServiceName,
+			Version:     version,
+			Environment: cfg.Otel.Environment,
+			Insecure:    cfg.Otel.Insecure,
+			SampleRate:  cfg.Otel.SampleRate,
+		}
+		otelProvider, err = telemetry.NewProvider(ctx, otelCfg)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize OpenTelemetry: %v", err)
+		} else {
+			tp = otelProvider.TracerProvider()
+			log.Printf("OpenTelemetry tracing enabled, exporting to %s", cfg.Otel.Endpoint)
+		}
+	}
+
 	// Initialize the storage backend based on configuration
 	// Supports: sqlite, postgres, mysql, filesystem
 	store, err := storage.New(cfg)
@@ -56,9 +82,15 @@ func main() {
 	}
 	defer store.Close()
 
+	// Optionally wrap storage with instrumented storage for tracing
+	var tracedStore storage.Storage = store
+	if tp != nil {
+		tracedStore = telemetry.NewInstrumentedStorage(store, tp)
+	}
+
 	// Create and configure the HTTP server
 	// The server handles all PrivateBin-compatible API endpoints
-	srv, err := server.New(cfg, store)
+	srv, err := server.New(cfg, tracedStore, tp)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
@@ -86,6 +118,15 @@ func main() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	// Shutdown OpenTelemetry to flush any pending traces
+	if otelProvider != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := otelProvider.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Error shutting down OpenTelemetry: %v", err)
+		}
 	}
 
 	log.Println("Server stopped gracefully")

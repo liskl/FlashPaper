@@ -4,6 +4,7 @@
 package storage
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -38,7 +39,7 @@ func NewMock() *Mock {
 }
 
 // CreatePaste stores a paste in memory.
-func (m *Mock) CreatePaste(id string, paste *model.Paste) error {
+func (m *Mock) CreatePaste(_ context.Context, id string, paste *model.Paste) error {
 	if m.CreatePasteErr != nil {
 		return m.CreatePasteErr
 	}
@@ -58,7 +59,7 @@ func (m *Mock) CreatePaste(id string, paste *model.Paste) error {
 }
 
 // ReadPaste retrieves a paste from memory.
-func (m *Mock) ReadPaste(id string) (*model.Paste, error) {
+func (m *Mock) ReadPaste(_ context.Context, id string) (*model.Paste, error) {
 	if m.ReadPasteErr != nil {
 		return nil, m.ReadPasteErr
 	}
@@ -82,7 +83,7 @@ func (m *Mock) ReadPaste(id string) (*model.Paste, error) {
 }
 
 // DeletePaste removes a paste from memory.
-func (m *Mock) DeletePaste(id string) error {
+func (m *Mock) DeletePaste(_ context.Context, id string) error {
 	if m.DeletePasteErr != nil {
 		return m.DeletePasteErr
 	}
@@ -100,7 +101,7 @@ func (m *Mock) DeletePaste(id string) error {
 }
 
 // PasteExists checks if a paste exists in memory.
-func (m *Mock) PasteExists(id string) bool {
+func (m *Mock) PasteExists(_ context.Context, id string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	_, exists := m.pastes[id]
@@ -108,7 +109,7 @@ func (m *Mock) PasteExists(id string) bool {
 }
 
 // CreateComment stores a comment in memory.
-func (m *Mock) CreateComment(pasteID, parentID, commentID string, comment *model.Comment) error {
+func (m *Mock) CreateComment(_ context.Context, pasteID, parentID, commentID string, comment *model.Comment) error {
 	if m.CreateCommentErr != nil {
 		return m.CreateCommentErr
 	}
@@ -137,7 +138,7 @@ func (m *Mock) CreateComment(pasteID, parentID, commentID string, comment *model
 }
 
 // ReadComments retrieves all comments for a paste.
-func (m *Mock) ReadComments(pasteID string) ([]*model.Comment, error) {
+func (m *Mock) ReadComments(_ context.Context, pasteID string) ([]*model.Comment, error) {
 	if m.ReadCommentsErr != nil {
 		return nil, m.ReadCommentsErr
 	}
@@ -160,7 +161,7 @@ func (m *Mock) ReadComments(pasteID string) ([]*model.Comment, error) {
 }
 
 // CommentExists checks if a comment exists.
-func (m *Mock) CommentExists(pasteID, parentID, commentID string) bool {
+func (m *Mock) CommentExists(_ context.Context, pasteID, parentID, commentID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -173,7 +174,7 @@ func (m *Mock) CommentExists(pasteID, parentID, commentID string) bool {
 }
 
 // SetValue stores a key-value pair.
-func (m *Mock) SetValue(namespace, key, value string) error {
+func (m *Mock) SetValue(_ context.Context, namespace, key, value string) error {
 	if m.SetValueErr != nil {
 		return m.SetValueErr
 	}
@@ -186,7 +187,7 @@ func (m *Mock) SetValue(namespace, key, value string) error {
 }
 
 // GetValue retrieves a stored value.
-func (m *Mock) GetValue(namespace, key string) (string, error) {
+func (m *Mock) GetValue(_ context.Context, namespace, key string) (string, error) {
 	if m.GetValueErr != nil {
 		return "", m.GetValueErr
 	}
@@ -198,7 +199,7 @@ func (m *Mock) GetValue(namespace, key string) (string, error) {
 }
 
 // GetExpiredPastes returns expired paste IDs.
-func (m *Mock) GetExpiredPastes(batchSize int) ([]string, error) {
+func (m *Mock) GetExpiredPastes(_ context.Context, batchSize int) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -218,15 +219,15 @@ func (m *Mock) GetExpiredPastes(batchSize int) ([]string, error) {
 }
 
 // Purge deletes expired pastes.
-func (m *Mock) Purge(batchSize int) (int, error) {
-	ids, err := m.GetExpiredPastes(batchSize)
+func (m *Mock) Purge(ctx context.Context, batchSize int) (int, error) {
+	ids, err := m.GetExpiredPastes(ctx, batchSize)
 	if err != nil {
 		return 0, err
 	}
 
 	count := 0
 	for _, id := range ids {
-		if err := m.DeletePaste(id); err == nil {
+		if err := m.DeletePaste(ctx, id); err == nil {
 			count++
 		}
 	}
@@ -235,7 +236,7 @@ func (m *Mock) Purge(batchSize int) (int, error) {
 }
 
 // PurgeValues removes old entries (no-op for mock).
-func (m *Mock) PurgeValues(namespace string, maxAge int64) error {
+func (m *Mock) PurgeValues(_ context.Context, namespace string, maxAge int64) error {
 	return nil
 }
 

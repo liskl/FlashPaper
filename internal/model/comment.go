@@ -122,8 +122,8 @@ func (c *Comment) ForResponse() *Comment {
 // CommentThread represents a threaded view of comments.
 // This is a helper structure for organizing comments into a tree.
 type CommentThread struct {
-	Comment  *Comment
-	Replies  []*CommentThread
+	Comment *Comment
+	Replies []*CommentThread
 }
 
 // BuildCommentTree organizes a flat list of comments into a threaded tree.

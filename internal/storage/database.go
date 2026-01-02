@@ -9,6 +9,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -193,7 +194,7 @@ func (d *Database) placeholders(count int) string {
 }
 
 // CreatePaste stores a new paste in the database.
-func (d *Database) CreatePaste(id string, paste *model.Paste) error {
+func (d *Database) CreatePaste(ctx context.Context, id string, paste *model.Paste) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -228,7 +229,7 @@ func (d *Database) CreatePaste(id string, paste *model.Paste) error {
 		d.placeholders(4),
 	)
 
-	_, err = d.db.Exec(query, id, string(dataJSON), paste.Meta.ExpireDate, string(metaJSON))
+	_, err = d.db.ExecContext(ctx, query, id, string(dataJSON), paste.Meta.ExpireDate, string(metaJSON))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") ||
 			strings.Contains(err.Error(), "duplicate") ||
@@ -242,7 +243,7 @@ func (d *Database) CreatePaste(id string, paste *model.Paste) error {
 }
 
 // ReadPaste retrieves a paste from the database.
-func (d *Database) ReadPaste(id string) (*model.Paste, error) {
+func (d *Database) ReadPaste(ctx context.Context, id string) (*model.Paste, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -254,7 +255,7 @@ func (d *Database) ReadPaste(id string) (*model.Paste, error) {
 	var dataJSON, metaJSON string
 	var expireDate sql.NullInt64
 
-	err := d.db.QueryRow(query, id).Scan(&dataJSON, &expireDate, &metaJSON)
+	err := d.db.QueryRowContext(ctx, query, id).Scan(&dataJSON, &expireDate, &metaJSON)
 	if err == sql.ErrNoRows {
 		return nil, model.ErrPasteNotFound
 	}
@@ -299,7 +300,7 @@ func (d *Database) ReadPaste(id string) (*model.Paste, error) {
 	if paste.IsExpired() {
 		// Delete the expired paste (don't hold lock for delete)
 		d.mu.RUnlock()
-		d.DeletePaste(id)
+		d.DeletePaste(ctx, id)
 		d.mu.RLock()
 		return nil, model.ErrPasteExpired
 	}
@@ -308,12 +309,12 @@ func (d *Database) ReadPaste(id string) (*model.Paste, error) {
 }
 
 // DeletePaste removes a paste and all its comments from the database.
-func (d *Database) DeletePaste(id string) error {
+func (d *Database) DeletePaste(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	// Start transaction
-	tx, err := d.db.Begin()
+	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
@@ -321,13 +322,13 @@ func (d *Database) DeletePaste(id string) error {
 
 	// Delete comments first (foreign key-like behavior)
 	commentQuery := fmt.Sprintf("DELETE FROM comment WHERE pasteid = %s", d.placeholder(1))
-	if _, err := tx.Exec(commentQuery, id); err != nil {
+	if _, err := tx.ExecContext(ctx, commentQuery, id); err != nil {
 		return fmt.Errorf("deleting comments: %w", err)
 	}
 
 	// Delete paste
 	pasteQuery := fmt.Sprintf("DELETE FROM paste WHERE dataid = %s", d.placeholder(1))
-	result, err := tx.Exec(pasteQuery, id)
+	result, err := tx.ExecContext(ctx, pasteQuery, id)
 	if err != nil {
 		return fmt.Errorf("deleting paste: %w", err)
 	}
@@ -344,23 +345,23 @@ func (d *Database) DeletePaste(id string) error {
 }
 
 // PasteExists checks if a paste exists in the database.
-func (d *Database) PasteExists(id string) bool {
+func (d *Database) PasteExists(ctx context.Context, id string) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	query := fmt.Sprintf("SELECT 1 FROM paste WHERE dataid = %s", d.placeholder(1))
 	var exists int
-	err := d.db.QueryRow(query, id).Scan(&exists)
+	err := d.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	return err == nil
 }
 
 // CreateComment stores a new comment in the database.
-func (d *Database) CreateComment(pasteID, parentID, commentID string, comment *model.Comment) error {
+func (d *Database) CreateComment(ctx context.Context, pasteID, parentID, commentID string, comment *model.Comment) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	// Verify paste exists
-	if !d.pasteExistsUnsafe(pasteID) {
+	if !d.pasteExistsUnsafe(ctx, pasteID) {
 		return model.ErrPasteNotFound
 	}
 
@@ -383,7 +384,7 @@ func (d *Database) CreateComment(pasteID, parentID, commentID string, comment *m
 		d.placeholders(6),
 	)
 
-	_, err = d.db.Exec(query, commentID, pasteID, parentID, string(dataJSON), comment.Vizhash, comment.Meta.PostDate)
+	_, err = d.db.ExecContext(ctx, query, commentID, pasteID, parentID, string(dataJSON), comment.Vizhash, comment.Meta.PostDate)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") ||
 			strings.Contains(err.Error(), "duplicate") ||
@@ -397,7 +398,7 @@ func (d *Database) CreateComment(pasteID, parentID, commentID string, comment *m
 }
 
 // ReadComments retrieves all comments for a paste.
-func (d *Database) ReadComments(pasteID string) ([]*model.Comment, error) {
+func (d *Database) ReadComments(ctx context.Context, pasteID string) ([]*model.Comment, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -406,7 +407,7 @@ func (d *Database) ReadComments(pasteID string) ([]*model.Comment, error) {
 		d.placeholder(1),
 	)
 
-	rows, err := d.db.Query(query, pasteID)
+	rows, err := d.db.QueryContext(ctx, query, pasteID)
 	if err != nil {
 		return nil, fmt.Errorf("querying comments: %w", err)
 	}
@@ -457,18 +458,18 @@ func (d *Database) ReadComments(pasteID string) ([]*model.Comment, error) {
 }
 
 // CommentExists checks if a comment exists.
-func (d *Database) CommentExists(pasteID, parentID, commentID string) bool {
+func (d *Database) CommentExists(ctx context.Context, pasteID, parentID, commentID string) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	query := fmt.Sprintf("SELECT 1 FROM comment WHERE dataid = %s AND pasteid = %s", d.placeholder(1), d.placeholder(2))
 	var exists int
-	err := d.db.QueryRow(query, commentID, pasteID).Scan(&exists)
+	err := d.db.QueryRowContext(ctx, query, commentID, pasteID).Scan(&exists)
 	return err == nil
 }
 
 // SetValue stores a key-value pair in the config table.
-func (d *Database) SetValue(namespace, key, value string) error {
+func (d *Database) SetValue(ctx context.Context, namespace, key, value string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -494,7 +495,7 @@ func (d *Database) SetValue(namespace, key, value string) error {
 		)
 	}
 
-	_, err := d.db.Exec(query, id, value)
+	_, err := d.db.ExecContext(ctx, query, id, value)
 	if err != nil {
 		return fmt.Errorf("setting value: %w", err)
 	}
@@ -502,7 +503,7 @@ func (d *Database) SetValue(namespace, key, value string) error {
 }
 
 // GetValue retrieves a value from the config table.
-func (d *Database) GetValue(namespace, key string) (string, error) {
+func (d *Database) GetValue(ctx context.Context, namespace, key string) (string, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -510,7 +511,7 @@ func (d *Database) GetValue(namespace, key string) (string, error) {
 	query := fmt.Sprintf("SELECT value FROM config WHERE id = %s", d.placeholder(1))
 
 	var value string
-	err := d.db.QueryRow(query, id).Scan(&value)
+	err := d.db.QueryRowContext(ctx, query, id).Scan(&value)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
@@ -521,7 +522,7 @@ func (d *Database) GetValue(namespace, key string) (string, error) {
 }
 
 // GetExpiredPastes returns a list of expired paste IDs.
-func (d *Database) GetExpiredPastes(batchSize int) ([]string, error) {
+func (d *Database) GetExpiredPastes(ctx context.Context, batchSize int) ([]string, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -541,7 +542,7 @@ func (d *Database) GetExpiredPastes(batchSize int) ([]string, error) {
 		)
 	}
 
-	rows, err := d.db.Query(query, now, batchSize)
+	rows, err := d.db.QueryContext(ctx, query, now, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("querying expired pastes: %w", err)
 	}
@@ -560,15 +561,15 @@ func (d *Database) GetExpiredPastes(batchSize int) ([]string, error) {
 }
 
 // Purge deletes expired pastes.
-func (d *Database) Purge(batchSize int) (int, error) {
-	ids, err := d.GetExpiredPastes(batchSize)
+func (d *Database) Purge(ctx context.Context, batchSize int) (int, error) {
+	ids, err := d.GetExpiredPastes(ctx, batchSize)
 	if err != nil {
 		return 0, err
 	}
 
 	count := 0
 	for _, id := range ids {
-		if err := d.DeletePaste(id); err != nil && err != model.ErrPasteNotFound {
+		if err := d.DeletePaste(ctx, id); err != nil && err != model.ErrPasteNotFound {
 			return count, err
 		}
 		count++
@@ -578,7 +579,7 @@ func (d *Database) Purge(batchSize int) (int, error) {
 }
 
 // PurgeValues removes old traffic limiter entries.
-func (d *Database) PurgeValues(namespace string, maxAge int64) error {
+func (d *Database) PurgeValues(ctx context.Context, namespace string, maxAge int64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -596,7 +597,7 @@ func (d *Database) PurgeValues(namespace string, maxAge int64) error {
 
 	// Note: This query may not work on all databases due to CAST syntax
 	// For production, consider storing timestamp in a separate column
-	_, err := d.db.Exec(query, prefix+"%", cutoff)
+	_, err := d.db.ExecContext(ctx, query, prefix+"%", cutoff)
 	if err != nil {
 		// Silently ignore errors - this is a cleanup operation
 		return nil
@@ -611,9 +612,9 @@ func (d *Database) Close() error {
 
 // pasteExistsUnsafe checks paste existence without acquiring lock.
 // Only call this when you already hold the lock.
-func (d *Database) pasteExistsUnsafe(id string) bool {
+func (d *Database) pasteExistsUnsafe(ctx context.Context, id string) bool {
 	query := fmt.Sprintf("SELECT 1 FROM paste WHERE dataid = %s", d.placeholder(1))
 	var exists int
-	err := d.db.QueryRow(query, id).Scan(&exists)
+	err := d.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	return err == nil
 }
