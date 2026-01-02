@@ -116,7 +116,7 @@ func (h *Handler) Routes() chi.Router {
 	// PrivateBin uses query string for paste ID: /?pasteID
 	r.Get("/", h.handleGet)
 	r.Post("/", h.handlePost)
-	r.Put("/", h.handlePost)    // PrivateBin also accepts PUT
+	r.Put("/", h.handlePost) // PrivateBin also accepts PUT
 	r.Delete("/", h.handleDelete)
 
 	// Static files served from embedded filesystem

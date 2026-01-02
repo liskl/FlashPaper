@@ -399,7 +399,7 @@ func TestDatabase_GetExpiredPastes(t *testing.T) {
 	err = db.CreatePaste(testCtx, "notexpired", paste)
 	require.NoError(t, err)
 
-	expired, err := db.GetExpiredPastes(testCtx,10)
+	expired, err := db.GetExpiredPastes(testCtx, 10)
 	require.NoError(t, err)
 	assert.Len(t, expired, 3)
 	assert.NotContains(t, expired, "notexpired")
@@ -734,7 +734,7 @@ func TestDatabase_Purge_WithNeverExpire(t *testing.T) {
 	require.NoError(t, err)
 
 	// Purge
-	count, err := db.Purge(testCtx,10)
+	count, err := db.Purge(testCtx, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count) // Only expired paste should be purged
 
@@ -763,7 +763,7 @@ func TestDatabase_GetExpiredPastes_WithLimit(t *testing.T) {
 	}
 
 	// Get with limit
-	expired, err := db.GetExpiredPastes(testCtx,5)
+	expired, err := db.GetExpiredPastes(testCtx, 5)
 	require.NoError(t, err)
 	assert.Len(t, expired, 5)
 }

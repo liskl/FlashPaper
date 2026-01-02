@@ -158,10 +158,10 @@ func TestPaste_SetExpiration_Never(t *testing.T) {
 
 func TestPaste_ForStorage_RemovesClientFields(t *testing.T) {
 	p := &Paste{
-		ID:         "testid",
-		Data:       "encrypted",
-		URL:        "/paste/testid",
-		Comments:   []*Comment{{ID: "c1"}},
+		ID:          "testid",
+		Data:        "encrypted",
+		URL:         "/paste/testid",
+		Comments:    []*Comment{{ID: "c1"}},
 		DeleteToken: "secret",
 		Meta: PasteMeta{
 			PostDate:         time.Now().Unix(),

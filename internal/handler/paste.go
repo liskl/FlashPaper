@@ -186,11 +186,11 @@ func (h *Handler) getPaste(w http.ResponseWriter, r *http.Request, pasteID strin
 
 	// Build response matching PrivateBin format
 	response := map[string]interface{}{
-		"id":   pasteID,
-		"url":  h.config.Main.BasePath + "/?" + pasteID,
-		"ct":   paste.Data,
+		"id":    pasteID,
+		"url":   h.config.Main.BasePath + "/?" + pasteID,
+		"ct":    paste.Data,
 		"adata": paste.AData,
-		"v":    paste.Version,
+		"v":     paste.Version,
 		"meta": map[string]interface{}{
 			"postdate":       paste.Meta.PostDate,
 			"opendiscussion": paste.Meta.OpenDiscussion,

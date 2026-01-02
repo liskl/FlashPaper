@@ -195,10 +195,10 @@ func DefaultConfig() *Config {
 			},
 		},
 		Traffic: TrafficConfig{
-			Limit:     10, // 10 seconds between pastes
-			Exempted:  []string{},
-			Creators:  []string{},
-			Header:    "",
+			Limit:    10, // 10 seconds between pastes
+			Exempted: []string{},
+			Creators: []string{},
+			Header:   "",
 		},
 		Purge: PurgeConfig{
 			Limit:     300, // 5 minutes between purge runs
