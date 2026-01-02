@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/liskl/FlashPaper/compare/v1.1.0...v1.2.0) (2026-01-02)
+
+
+### Features
+
+* add OpenTelemetry distributed tracing support ([#12](https://github.com/liskl/FlashPaper/issues/12)) ([fb76eff](https://github.com/liskl/FlashPaper/commit/fb76effdbfa0178d2b4eeb15253337153f6ee5b0))
+
 # [1.1.0](https://github.com/liskl/FlashPaper/compare/v1.0.2...v1.1.0) (2025-12-16)
 
 
