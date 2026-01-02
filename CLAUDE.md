@@ -462,6 +462,7 @@ open http://localhost:8080
 - Custom error types for domain errors (`internal/model/errors.go`)
 - Paste IDs: 16 lowercase hexadecimal characters (a-f, 0-9)
 - Always use commitlint-styled commit messages (conventional commits)
+- **Always run `go fmt ./...` before committing changes to ensure consistent formatting**
 
 ## Commit Message Format
 
