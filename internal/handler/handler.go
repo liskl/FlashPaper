@@ -4,12 +4,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"io/fs"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel/trace"
 
 	flashpaper "github.com/liskl/flashpaper"
 	"github.com/liskl/flashpaper/internal/config"
@@ -24,13 +26,22 @@ type Handler struct {
 	salt     string             // Server salt for delete tokens
 	template *template.Template // Parsed HTML template
 	staticFS fs.FS              // Embedded static files (JS, CSS)
+	tracer   trace.Tracer       // OpenTelemetry tracer
 }
 
-// New creates a new Handler with the given configuration and storage.
-func New(cfg *config.Config, store storage.Storage) *Handler {
+// New creates a new Handler with the given configuration, storage, and tracer provider.
+// If tp is nil, a no-op tracer is used.
+func New(cfg *config.Config, store storage.Storage, tp trace.TracerProvider) *Handler {
 	h := &Handler{
 		config: cfg,
 		store:  store,
+	}
+
+	// Initialize tracer
+	if tp != nil {
+		h.tracer = tp.Tracer("github.com/liskl/flashpaper/internal/handler")
+	} else {
+		h.tracer = trace.NewNoopTracerProvider().Tracer("handler")
 	}
 
 	// Initialize or retrieve server salt
@@ -69,8 +80,10 @@ func (h *Handler) initStaticFS() {
 // initSalt retrieves or generates the server salt.
 // The salt is used for generating delete tokens and must persist across restarts.
 func (h *Handler) initSalt() {
+	ctx := context.Background()
+
 	// Try to get existing salt
-	salt, err := h.store.GetValue(storage.NamespaceSalt, "server")
+	salt, err := h.store.GetValue(ctx, storage.NamespaceSalt, "server")
 	if err == nil && salt != "" {
 		h.salt = salt
 		return
@@ -84,7 +97,7 @@ func (h *Handler) initSalt() {
 	}
 
 	// Store for future use
-	_ = h.store.SetValue(storage.NamespaceSalt, "server", salt)
+	_ = h.store.SetValue(ctx, storage.NamespaceSalt, "server", salt)
 	h.salt = salt
 }
 

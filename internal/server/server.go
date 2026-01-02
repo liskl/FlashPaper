@@ -11,11 +11,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/liskl/flashpaper/internal/config"
 	"github.com/liskl/flashpaper/internal/handler"
 	fpMiddleware "github.com/liskl/flashpaper/internal/middleware"
 	"github.com/liskl/flashpaper/internal/storage"
+	"github.com/liskl/flashpaper/internal/telemetry"
 )
 
 // Server wraps the HTTP server with FlashPaper configuration.
@@ -26,9 +28,16 @@ type Server struct {
 }
 
 // New creates a new FlashPaper HTTP server.
-func New(cfg *config.Config, store storage.Storage) (*Server, error) {
+// If tp is nil, tracing middleware is disabled.
+func New(cfg *config.Config, store storage.Storage, tp trace.TracerProvider) (*Server, error) {
 	// Create the main router
 	r := chi.NewRouter()
+
+	// Apply OpenTelemetry tracing middleware first (if enabled)
+	// This must be before other middleware to capture the full request lifecycle
+	if tp != nil && cfg.Otel.Enabled {
+		r.Use(telemetry.HTTPMiddleware(cfg.Otel.ServiceName))
+	}
 
 	// Apply middleware stack
 	r.Use(middleware.RequestID)
@@ -40,8 +49,8 @@ func New(cfg *config.Config, store storage.Storage) (*Server, error) {
 	// Security headers
 	r.Use(fpMiddleware.SecurityHeaders(cfg))
 
-	// Create the main handler
-	h := handler.New(cfg, store)
+	// Create the main handler with tracer provider
+	h := handler.New(cfg, store, tp)
 
 	// Mount routes
 	r.Mount("/", h.Routes())

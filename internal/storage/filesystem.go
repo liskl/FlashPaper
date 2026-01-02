@@ -3,18 +3,20 @@
 // structure to avoid performance issues with too many files in a single directory.
 //
 // Directory structure:
-//   data/
-//     f4/
-//       68/
-//         f468483c313401e8           <- paste file
-//         f468483c313401e8.discussion/
-//           comment1.parent1.json    <- comment file
+//
+//	data/
+//	  f4/
+//	    68/
+//	      f468483c313401e8           <- paste file
+//	      f468483c313401e8.discussion/
+//	        comment1.parent1.json    <- comment file
 //
 // Each paste file contains JSON with the encrypted data and metadata.
 // Comments are stored in a .discussion subdirectory.
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -93,7 +95,7 @@ type pasteStorageData struct {
 }
 
 // CreatePaste stores a new paste on the filesystem.
-func (f *Filesystem) CreatePaste(id string, paste *model.Paste) error {
+func (f *Filesystem) CreatePaste(_ context.Context, id string, paste *model.Paste) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -139,7 +141,7 @@ func (f *Filesystem) CreatePaste(id string, paste *model.Paste) error {
 }
 
 // ReadPaste retrieves a paste from the filesystem.
-func (f *Filesystem) ReadPaste(id string) (*model.Paste, error) {
+func (f *Filesystem) ReadPaste(ctx context.Context, id string) (*model.Paste, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -172,7 +174,7 @@ func (f *Filesystem) ReadPaste(id string) (*model.Paste, error) {
 	if paste.IsExpired() {
 		// Delete the expired paste
 		f.mu.RUnlock()
-		f.DeletePaste(id)
+		f.DeletePaste(ctx, id)
 		f.mu.RLock()
 		return nil, model.ErrPasteExpired
 	}
@@ -181,7 +183,7 @@ func (f *Filesystem) ReadPaste(id string) (*model.Paste, error) {
 }
 
 // DeletePaste removes a paste and its comments from the filesystem.
-func (f *Filesystem) DeletePaste(id string) error {
+func (f *Filesystem) DeletePaste(_ context.Context, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -207,7 +209,7 @@ func (f *Filesystem) DeletePaste(id string) error {
 }
 
 // PasteExists checks if a paste exists on the filesystem.
-func (f *Filesystem) PasteExists(id string) bool {
+func (f *Filesystem) PasteExists(_ context.Context, id string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -226,7 +228,7 @@ type commentStorageData struct {
 }
 
 // CreateComment stores a new comment on the filesystem.
-func (f *Filesystem) CreateComment(pasteID, parentID, commentID string, comment *model.Comment) error {
+func (f *Filesystem) CreateComment(_ context.Context, pasteID, parentID, commentID string, comment *model.Comment) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -278,7 +280,7 @@ func (f *Filesystem) CreateComment(pasteID, parentID, commentID string, comment 
 }
 
 // ReadComments retrieves all comments for a paste.
-func (f *Filesystem) ReadComments(pasteID string) ([]*model.Comment, error) {
+func (f *Filesystem) ReadComments(_ context.Context, pasteID string) ([]*model.Comment, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -342,7 +344,7 @@ func (f *Filesystem) ReadComments(pasteID string) ([]*model.Comment, error) {
 }
 
 // CommentExists checks if a comment exists.
-func (f *Filesystem) CommentExists(pasteID, parentID, commentID string) bool {
+func (f *Filesystem) CommentExists(_ context.Context, pasteID, parentID, commentID string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -352,7 +354,7 @@ func (f *Filesystem) CommentExists(pasteID, parentID, commentID string) bool {
 }
 
 // SetValue stores a key-value pair.
-func (f *Filesystem) SetValue(namespace, key, value string) error {
+func (f *Filesystem) SetValue(_ context.Context, namespace, key, value string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -373,7 +375,7 @@ func (f *Filesystem) SetValue(namespace, key, value string) error {
 }
 
 // GetValue retrieves a stored value.
-func (f *Filesystem) GetValue(namespace, key string) (string, error) {
+func (f *Filesystem) GetValue(_ context.Context, namespace, key string) (string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -389,7 +391,7 @@ func (f *Filesystem) GetValue(namespace, key string) (string, error) {
 }
 
 // GetExpiredPastes returns a list of expired paste IDs.
-func (f *Filesystem) GetExpiredPastes(batchSize int) ([]string, error) {
+func (f *Filesystem) GetExpiredPastes(_ context.Context, batchSize int) ([]string, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -439,15 +441,15 @@ func (f *Filesystem) GetExpiredPastes(batchSize int) ([]string, error) {
 }
 
 // Purge deletes expired pastes.
-func (f *Filesystem) Purge(batchSize int) (int, error) {
-	ids, err := f.GetExpiredPastes(batchSize)
+func (f *Filesystem) Purge(ctx context.Context, batchSize int) (int, error) {
+	ids, err := f.GetExpiredPastes(ctx, batchSize)
 	if err != nil {
 		return 0, err
 	}
 
 	count := 0
 	for _, id := range ids {
-		if err := f.DeletePaste(id); err != nil && err != model.ErrPasteNotFound {
+		if err := f.DeletePaste(ctx, id); err != nil && err != model.ErrPasteNotFound {
 			return count, err
 		}
 		count++
@@ -457,7 +459,7 @@ func (f *Filesystem) Purge(batchSize int) (int, error) {
 }
 
 // PurgeValues removes old config entries.
-func (f *Filesystem) PurgeValues(namespace string, maxAge int64) error {
+func (f *Filesystem) PurgeValues(_ context.Context, namespace string, maxAge int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

@@ -10,9 +10,11 @@
 // - Expired paste purging
 //
 // All implementations must be safe for concurrent use.
+// All methods accept a context.Context for tracing and cancellation.
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -23,6 +25,7 @@ import (
 // Storage defines the contract for paste and comment persistence.
 // Implementations must be safe for concurrent use.
 // All methods that modify state should be atomic where possible.
+// All methods accept a context.Context for tracing and cancellation.
 type Storage interface {
 	// Paste operations
 
@@ -30,58 +33,58 @@ type Storage interface {
 	// Returns model.ErrPasteExists if a paste with this ID already exists.
 	// The paste's metadata (expiration, burn-after-reading) is stored
 	// alongside the encrypted content.
-	CreatePaste(id string, paste *model.Paste) error
+	CreatePaste(ctx context.Context, id string, paste *model.Paste) error
 
 	// ReadPaste retrieves a paste by ID.
 	// Returns model.ErrPasteNotFound if the paste doesn't exist.
 	// Returns model.ErrPasteExpired if the paste has expired (and deletes it).
-	ReadPaste(id string) (*model.Paste, error)
+	ReadPaste(ctx context.Context, id string) (*model.Paste, error)
 
 	// DeletePaste removes a paste and all its comments.
 	// Returns model.ErrPasteNotFound if the paste doesn't exist.
-	DeletePaste(id string) error
+	DeletePaste(ctx context.Context, id string) error
 
 	// PasteExists checks if a paste with the given ID exists.
 	// This is a quick check that doesn't load the full paste data.
-	PasteExists(id string) bool
+	PasteExists(ctx context.Context, id string) bool
 
 	// Comment operations
 
 	// CreateComment stores a new comment on a paste.
 	// Returns model.ErrPasteNotFound if the paste doesn't exist.
 	// Returns model.ErrCommentExists if a comment with this ID exists.
-	CreateComment(pasteID, parentID, commentID string, comment *model.Comment) error
+	CreateComment(ctx context.Context, pasteID, parentID, commentID string, comment *model.Comment) error
 
 	// ReadComments retrieves all comments for a paste.
 	// Returns an empty slice if no comments exist.
-	ReadComments(pasteID string) ([]*model.Comment, error)
+	ReadComments(ctx context.Context, pasteID string) ([]*model.Comment, error)
 
 	// CommentExists checks if a comment exists.
-	CommentExists(pasteID, parentID, commentID string) bool
+	CommentExists(ctx context.Context, pasteID, parentID, commentID string) bool
 
 	// Key-value storage for configuration and rate limiting
 
 	// SetValue stores a string value with the given namespace and key.
 	// Used for server salt, rate limiting timestamps, etc.
-	SetValue(namespace, key, value string) error
+	SetValue(ctx context.Context, namespace, key, value string) error
 
 	// GetValue retrieves a stored value.
 	// Returns empty string if the key doesn't exist.
-	GetValue(namespace, key string) (string, error)
+	GetValue(ctx context.Context, namespace, key string) (string, error)
 
 	// Maintenance operations
 
 	// GetExpiredPastes returns a list of expired paste IDs up to batchSize.
 	// Used by the purge system to clean up old pastes.
-	GetExpiredPastes(batchSize int) ([]string, error)
+	GetExpiredPastes(ctx context.Context, batchSize int) ([]string, error)
 
 	// Purge deletes expired pastes up to batchSize.
 	// Returns the number of pastes deleted.
-	Purge(batchSize int) (int, error)
+	Purge(ctx context.Context, batchSize int) (int, error)
 
 	// PurgeValues removes outdated rate limiting entries.
 	// Entries older than maxAge seconds are removed.
-	PurgeValues(namespace string, maxAge int64) error
+	PurgeValues(ctx context.Context, namespace string, maxAge int64) error
 
 	// Close releases any resources held by the storage backend.
 	// Should be called when the application shuts down.

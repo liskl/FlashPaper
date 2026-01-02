@@ -92,6 +92,10 @@ flashpaper/
 │   │   ├── filesystem.go        # File-based storage impl
 │   │   ├── mock.go              # Mock storage for testing
 │   │   └── *_test.go            # Storage tests
+│   ├── telemetry/               # OpenTelemetry tracing
+│   │   ├── provider.go          # TracerProvider initialization
+│   │   ├── middleware.go        # HTTP middleware wrapper
+│   │   └── storage.go           # Instrumented storage wrapper
 │   └── util/                    # Crypto, ID generation utilities
 │       ├── crypto.go            # HMAC, salt, vizhash generation
 │       ├── id.go                # Paste/comment ID generation
@@ -151,6 +155,13 @@ flashpaper/
 - Light mode (default) with CSS custom properties
 - Dark mode activated via `[data-theme="dark"]` attribute
 - Greyscale dark theme palette
+
+**Telemetry** (`internal/telemetry/`):
+- `provider.go`: Initializes TracerProvider with OTLP/gRPC exporter
+- `middleware.go`: HTTP middleware using `otelhttp` for automatic request tracing
+- `storage.go`: Wrapper that adds tracing spans to all storage operations
+- Graceful shutdown with trace flushing
+- No-op provider when OTEL is disabled
 
 ## API Endpoints
 
@@ -250,6 +261,46 @@ postgres://user:password@localhost:5432/flashpaper?sslmode=disable
 user:password@tcp(localhost:3306)/flashpaper?charset=utf8mb4
 ```
 
+### OpenTelemetry Configuration
+
+FlashPaper supports OpenTelemetry (OTEL) tracing for distributed tracing and observability.
+
+**INI Configuration:**
+```ini
+[otel]
+enabled = true                                              # Enable/disable tracing
+endpoint = "otel-daemonset-collector.observability:4317"    # OTLP gRPC endpoint
+servicename = "flashpaper"                                  # Service name in traces
+environment = "production"                                  # Environment tag
+insecure = true                                             # Use insecure gRPC connection
+samplerate = 1.0                                            # Trace sampling rate (0.0-1.0)
+```
+
+**Environment Variables:**
+| Variable | Description |
+|----------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint (overrides INI) |
+| `OTEL_SERVICE_NAME` | Service name (overrides INI) |
+| `FLASHPAPER_OTEL_ENABLED` | Enable tracing (`true`/`false`) |
+| `FLASHPAPER_OTEL_ENDPOINT` | OTLP endpoint |
+| `FLASHPAPER_OTEL_SERVICENAME` | Service name |
+| `FLASHPAPER_OTEL_ENVIRONMENT` | Environment tag |
+| `FLASHPAPER_OTEL_INSECURE` | Insecure gRPC (`true`/`false`) |
+| `FLASHPAPER_OTEL_SAMPLERATE` | Sampling rate |
+
+**Instrumented Operations:**
+
+| Span Name | Attributes |
+|-----------|------------|
+| `HTTP GET /`, `HTTP POST /` | `http.method`, `http.route`, `http.status_code` |
+| `Handler.createPaste` | `flashpaper.paste.id` |
+| `Handler.getPaste` | `flashpaper.paste.id` |
+| `Handler.deletePaste` | `flashpaper.paste.id` |
+| `Handler.createComment` | `flashpaper.paste.id`, `flashpaper.comment.id` |
+| `Database.CreatePaste` | `db.system`, `db.operation` |
+| `Database.ReadPaste` | `db.system`, `db.operation` |
+| `Filesystem.CreatePaste` | `db.system`, `db.operation` |
+
 ## Testing
 
 Tests require CGO for SQLite support:
@@ -275,8 +326,9 @@ CGO_ENABLED=1 go test -race ./...
 | internal/middleware | 100.0% |
 | internal/model | 98.6% |
 | internal/util | 90.7% |
-| internal/handler | 86.0% |
-| internal/config | 82.0% |
+| internal/handler | 86.4% |
+| internal/config | 85.2% |
+| internal/telemetry | 71.8% |
 | internal/storage | 60.1% |
 
 ### Handler Test Examples
@@ -287,10 +339,11 @@ The handler tests use mock storage (`storage.Mock`) with these patterns:
 // Create test handler with mock storage
 h, mockStore := newTestHandler(t)
 
-// Inject test data
+// Inject test data (note: context.Context is required for all storage calls)
+ctx := context.Background()
 paste := model.NewPaste()
 paste.Data = "encrypted-content"
-mockStore.CreatePaste("abcdef1234567890", paste)
+mockStore.CreatePaste(ctx, "abcdef1234567890", paste)
 
 // Make HTTP request
 req := httptest.NewRequest(http.MethodGet, "/?abcdef1234567890", nil)

@@ -3,12 +3,15 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/liskl/flashpaper/internal/config"
 	"github.com/liskl/flashpaper/internal/model"
@@ -52,6 +55,7 @@ func newTestHandler(t *testing.T) (*Handler, *storage.Mock) {
 		config: cfg,
 		store:  mockStore,
 		salt:   "dGVzdC1zYWx0LTEyMzQ1LWZsYXNocGFwZXI=", // base64("test-salt-12345-flashpaper")
+		tracer: trace.NewNoopTracerProvider().Tracer("test"),
 	}
 
 	return h, mockStore
@@ -240,13 +244,14 @@ func TestCreatePaste_ExceedsSizeLimit(t *testing.T) {
 // TestGetPaste_ValidPaste tests retrieving an existing paste.
 func TestGetPaste_ValidPaste(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste directly in storage (16 lowercase hex chars)
 	pasteID := "abcdef1234567890"
 	paste := model.NewPaste()
 	paste.Data = "encrypted-content"
 	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",0,0]`)
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Request the paste with JSON header
 	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID, nil)
@@ -315,6 +320,7 @@ func TestGetPaste_InvalidID(t *testing.T) {
 // TestGetPaste_BurnAfterReading tests that burn-after-reading pastes are deleted.
 func TestGetPaste_BurnAfterReading(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a burn-after-reading paste (16 lowercase hex chars)
 	pasteID := "baf1ead123456789"
@@ -322,7 +328,7 @@ func TestGetPaste_BurnAfterReading(t *testing.T) {
 	paste.Data = "secret-content"
 	paste.Meta.BurnAfterReading = true
 	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",0,1]`)
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// First read should succeed
 	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID, nil)
@@ -342,12 +348,13 @@ func TestGetPaste_BurnAfterReading(t *testing.T) {
 // TestDeletePaste_ValidToken tests deleting a paste with valid token.
 func TestDeletePaste_ValidToken(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste (16 lowercase hex chars)
 	pasteID := "de1e7e0012345678"
 	paste := model.NewPaste()
 	paste.Data = "to-be-deleted"
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Generate valid delete token
 	deleteToken, _ := util.GenerateDeleteToken(pasteID, h.salt)
@@ -369,7 +376,7 @@ func TestDeletePaste_ValidToken(t *testing.T) {
 	}
 
 	// Verify paste was deleted
-	if mockStore.PasteExists(pasteID) {
+	if mockStore.PasteExists(ctx, pasteID) {
 		t.Error("paste should have been deleted")
 	}
 }
@@ -377,12 +384,13 @@ func TestDeletePaste_ValidToken(t *testing.T) {
 // TestDeletePaste_InvalidToken tests rejecting delete with wrong token.
 func TestDeletePaste_InvalidToken(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste (16 lowercase hex chars)
 	pasteID := "0de1e7e123456789"
 	paste := model.NewPaste()
 	paste.Data = "should-not-delete"
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Send delete request with invalid token
 	reqBody := map[string]interface{}{
@@ -401,7 +409,7 @@ func TestDeletePaste_InvalidToken(t *testing.T) {
 	}
 
 	// Verify paste still exists
-	if !mockStore.PasteExists(pasteID) {
+	if !mockStore.PasteExists(ctx, pasteID) {
 		t.Error("paste should not have been deleted with invalid token")
 	}
 }
@@ -470,13 +478,14 @@ func TestDeletePaste_NotFound(t *testing.T) {
 // TestCreateComment_ValidRequest tests creating a comment on a paste.
 func TestCreateComment_ValidRequest(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste with discussion enabled
 	pasteID := "d15c055ea5e01234"
 	paste := model.NewPaste()
 	paste.Data = "paste-with-discussion"
 	paste.Meta.OpenDiscussion = true
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Create a comment
 	reqBody := map[string]interface{}{
@@ -511,6 +520,7 @@ func TestCreateComment_ValidRequest(t *testing.T) {
 // TestCreateComment_DiscussionDisabled tests rejecting comments when globally disabled.
 func TestCreateComment_DiscussionDisabled(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Disable discussion globally
 	h.config.Main.Discussion = false
@@ -520,7 +530,7 @@ func TestCreateComment_DiscussionDisabled(t *testing.T) {
 	paste := model.NewPaste()
 	paste.Data = "paste-data"
 	paste.Meta.OpenDiscussion = true
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Try to create a comment
 	reqBody := map[string]interface{}{
@@ -542,13 +552,14 @@ func TestCreateComment_DiscussionDisabled(t *testing.T) {
 // TestCreateComment_PasteDiscussionDisabled tests rejecting comments on pastes without discussion.
 func TestCreateComment_PasteDiscussionDisabled(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste WITHOUT discussion enabled
 	pasteID := "4444444444444444"
 	paste := model.NewPaste()
 	paste.Data = "no-discussion-paste"
 	paste.Meta.OpenDiscussion = false
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Try to create a comment
 	reqBody := map[string]interface{}{
@@ -570,6 +581,7 @@ func TestCreateComment_PasteDiscussionDisabled(t *testing.T) {
 // TestCreateComment_BurnAfterReadingPaste tests rejecting comments on burn-after-reading pastes.
 func TestCreateComment_BurnAfterReadingPaste(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a burn-after-reading paste
 	pasteID := "5555555555555555"
@@ -577,7 +589,7 @@ func TestCreateComment_BurnAfterReadingPaste(t *testing.T) {
 	paste.Data = "burn-paste"
 	paste.Meta.OpenDiscussion = true
 	paste.Meta.BurnAfterReading = true
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Try to create a comment
 	reqBody := map[string]interface{}{
@@ -619,6 +631,7 @@ func TestCreateComment_PasteNotFound(t *testing.T) {
 // TestGetPaste_WithComments tests retrieving a paste with comments.
 func TestGetPaste_WithComments(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste with discussion enabled
 	pasteID := "7777777777777777"
@@ -626,13 +639,13 @@ func TestGetPaste_WithComments(t *testing.T) {
 	paste.Data = "paste-content"
 	paste.Meta.OpenDiscussion = true
 	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",1,0]`)
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Add a comment
 	comment := model.NewComment(pasteID)
 	comment.Data = "comment-content"
 	comment.ParentID = pasteID
-	mockStore.CreateComment(pasteID, pasteID, "c0ffee1234567890", comment)
+	mockStore.CreateComment(ctx, pasteID, pasteID, "c0ffee1234567890", comment)
 
 	// Request the paste
 	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID, nil)
@@ -821,12 +834,13 @@ func TestGetUI(t *testing.T) {
 // TestPostViaDeleteToken tests deletion via POST with deletetoken (PrivateBin compatibility).
 func TestPostViaDeleteToken(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste
 	pasteID := "8888888888888888"
 	paste := model.NewPaste()
 	paste.Data = "to-be-deleted-via-post"
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Generate valid delete token
 	deleteToken, _ := util.GenerateDeleteToken(pasteID, h.salt)
@@ -848,7 +862,7 @@ func TestPostViaDeleteToken(t *testing.T) {
 	}
 
 	// Verify paste was deleted
-	if mockStore.PasteExists(pasteID) {
+	if mockStore.PasteExists(ctx, pasteID) {
 		t.Error("paste should have been deleted via POST with deletetoken")
 	}
 }
@@ -1375,7 +1389,7 @@ func TestHandlerNew(t *testing.T) {
 	}
 
 	mockStore := storage.NewMock()
-	h := New(cfg, mockStore)
+	h := New(cfg, mockStore, nil) // nil TracerProvider for no-op tracing
 
 	if h == nil {
 		t.Fatal("expected non-nil handler")
@@ -1403,17 +1417,23 @@ func TestHandlerNew(t *testing.T) {
 	if h.staticFS == nil {
 		t.Error("staticFS should be initialized")
 	}
+
+	// Tracer should be initialized (no-op when nil TracerProvider passed)
+	if h.tracer == nil {
+		t.Error("tracer should be initialized")
+	}
 }
 
 // TestHandleDeleteMethod tests the DELETE HTTP method handler.
 func TestHandleDeleteMethod(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	// Create a paste
 	pasteID := "de1e7eaabbccdd00"
 	paste := model.NewPaste()
 	paste.Data = "to-be-deleted"
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Generate valid delete token
 	deleteToken, _ := util.GenerateDeleteToken(pasteID, h.salt)
@@ -1435,7 +1455,7 @@ func TestHandleDeleteMethod(t *testing.T) {
 	}
 
 	// Verify paste was deleted
-	if mockStore.PasteExists(pasteID) {
+	if mockStore.PasteExists(ctx, pasteID) {
 		t.Error("paste should have been deleted")
 	}
 }
@@ -1458,13 +1478,14 @@ func TestHandleDeleteInvalidJSON(t *testing.T) {
 // TestServeUI_WithPasteID tests serving UI when paste ID is in query.
 func TestServeUI_WithPasteID(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 	h.initTemplates()
 
 	// Create a paste
 	pasteID := "abcd1234abcd1234"
 	paste := model.NewPaste()
 	paste.Data = "test-content"
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Request with paste ID but no JSON header (should serve UI)
 	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID, nil)
@@ -1509,12 +1530,13 @@ func TestServeUI_Fallback(t *testing.T) {
 // TestGetPaste_WithQueryParams tests paste ID extraction with extra query params.
 func TestGetPaste_WithQueryParams(t *testing.T) {
 	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
 
 	pasteID := "aaaa1111bbbb2222"
 	paste := model.NewPaste()
 	paste.Data = "test-data"
 	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",0,0]`)
-	mockStore.CreatePaste(pasteID, paste)
+	mockStore.CreatePaste(ctx, pasteID, paste)
 
 	// Request with extra query parameters after paste ID
 	req := httptest.NewRequest(http.MethodGet, "/?"+pasteID+"&extra=param", nil)
@@ -1570,7 +1592,7 @@ func TestCreatePaste_WithBurnAfterReading(t *testing.T) {
 	pasteID := response["id"].(string)
 
 	// Verify burn flag was set
-	paste, _ := mockStore.ReadPaste(pasteID)
+	paste, _ := mockStore.ReadPaste(context.Background(), pasteID)
 	if !paste.Meta.BurnAfterReading {
 		t.Error("burn after reading flag should be set")
 	}
@@ -1611,7 +1633,7 @@ func TestCreatePaste_WithOpenDiscussion(t *testing.T) {
 	pasteID := response["id"].(string)
 
 	// Verify discussion flag was set
-	paste, _ := mockStore.ReadPaste(pasteID)
+	paste, _ := mockStore.ReadPaste(context.Background(), pasteID)
 	if !paste.Meta.OpenDiscussion {
 		t.Error("open discussion flag should be set")
 	}
@@ -1652,8 +1674,270 @@ func TestCreatePaste_NeverExpire(t *testing.T) {
 	pasteID := response["id"].(string)
 
 	// Verify no expiration (ExpireDate = 0 means never expires)
-	paste, _ := mockStore.ReadPaste(pasteID)
+	paste, _ := mockStore.ReadPaste(context.Background(), pasteID)
 	if paste.Meta.ExpireDate != 0 {
 		t.Errorf("expected no expiration (0), got %d", paste.Meta.ExpireDate)
+	}
+}
+
+// TestCreateComment_NoPasteID tests rejecting comments without a paste ID.
+func TestCreateComment_NoPasteID(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"data": "comment-data",
+		// Missing pasteid
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestCreateComment_InvalidPasteID tests rejecting comments with invalid paste ID format.
+func TestCreateComment_InvalidPasteID(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"pasteid": "invalid-id!", // Invalid characters
+		"data":    "comment-data",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestCreateComment_InvalidParentID tests rejecting comments with invalid parent ID.
+func TestCreateComment_InvalidParentID(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
+
+	// Create a paste with discussion enabled
+	pasteID := "9999999999999999"
+	paste := model.NewPaste()
+	paste.Data = "paste-content"
+	paste.Meta.OpenDiscussion = true
+	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",1,0]`)
+	mockStore.CreatePaste(ctx, pasteID, paste)
+
+	reqBody := map[string]interface{}{
+		"pasteid":  pasteID,
+		"parentid": "invalid-parent!!", // Invalid format
+		"data":     "comment-data",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestCreateComment_NoCommentData tests rejecting comments without data.
+func TestCreateComment_NoCommentData(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
+
+	// Create a paste with discussion enabled
+	pasteID := "aaaaaaaaaaaaaaaa"
+	paste := model.NewPaste()
+	paste.Data = "paste-content"
+	paste.Meta.OpenDiscussion = true
+	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",1,0]`)
+	mockStore.CreatePaste(ctx, pasteID, paste)
+
+	reqBody := map[string]interface{}{
+		"pasteid": pasteID,
+		// Missing data field
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestCreateComment_WithVersion tests comment creation with version field.
+func TestCreateComment_WithVersion(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+	ctx := context.Background()
+
+	// Create a paste with discussion enabled
+	pasteID := "bbbbbbbbbbbbbbbb"
+	paste := model.NewPaste()
+	paste.Data = "paste-content"
+	paste.Meta.OpenDiscussion = true
+	paste.AData = []byte(`[["iv","salt",100000,256,128,"aes","gcm","zlib"],"plaintext",1,0]`)
+	mockStore.CreatePaste(ctx, pasteID, paste)
+
+	reqBody := map[string]interface{}{
+		"pasteid": pasteID,
+		"data":    "comment-data",
+		"v":       float64(2),
+		"adata":   []interface{}{"iv", "salt"},
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+}
+
+// TestHandlerNew_WithTracerProvider tests handler creation with a tracer provider.
+func TestHandlerNew_WithTracerProvider(t *testing.T) {
+	cfg := config.DefaultConfig()
+	mockStore := storage.NewMock()
+
+	// Create with nil tracer provider - should use noop
+	h := New(cfg, mockStore, nil)
+
+	if h == nil {
+		t.Fatal("expected handler to be created")
+	}
+
+	if h.tracer == nil {
+		t.Error("expected tracer to be set (even as noop)")
+	}
+}
+
+// TestCreatePaste_ExceedsSizeLimit_LargeContent tests rejecting pastes that exceed size limit with large content.
+func TestCreatePaste_ExceedsSizeLimit_LargeContent(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	// Set a small size limit for testing
+	h.config.Main.SizeLimit = 100
+
+	// Create a paste larger than the limit
+	largeContent := strings.Repeat("x", 200)
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": largeContent,
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	// Size limit returns 400 Bad Request with message
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestCreatePaste_WithAttachment tests paste creation with an attachment.
+func TestCreatePaste_WithAttachment(t *testing.T) {
+	h, mockStore := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"v":              2,
+		"ct":             "paste-content",
+		"attachment":     "base64-encoded-attachment-data",
+		"attachmentname": "test-file.txt",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &response)
+
+	pasteID := response["id"].(string)
+	paste, _ := mockStore.ReadPaste(context.Background(), pasteID)
+
+	if paste.Attachment != "base64-encoded-attachment-data" {
+		t.Errorf("expected attachment data, got %s", paste.Attachment)
+	}
+	if paste.AttachmentName != "test-file.txt" {
+		t.Errorf("expected attachment name 'test-file.txt', got %s", paste.AttachmentName)
+	}
+}
+
+// TestCreatePaste_BurnAfterReadingWithDiscussion tests that BAR and discussion are mutually exclusive.
+func TestCreatePaste_BurnAfterReadingWithDiscussion(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": "paste-content",
+		"adata": []interface{}{
+			[]interface{}{"iv", "salt", 100000, 256, 128, "aes", "gcm", "zlib"},
+			"plaintext",
+			1, // opendiscussion = 1
+			1, // burnafterreading = 1 (conflict!)
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.handlePost(rr, req)
+
+	// BAR and discussion conflict returns an error
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+// TestRateLimiting_Exempted tests that exempted IPs bypass rate limiting.
+func TestRateLimiting_Exempted(t *testing.T) {
+	h, _ := newTestHandler(t)
+
+	// Enable rate limiting with exemption
+	h.config.Traffic.Limit = 60
+	h.config.Traffic.Exempted = []string{"10.0.0.1"}
+
+	reqBody := map[string]interface{}{
+		"v":  2,
+		"ct": "test-content",
+	}
+
+	// Request from exempted IP should succeed
+	body1, _ := json.Marshal(reqBody)
+	req1 := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body1))
+	req1.Header.Set("Content-Type", "application/json")
+	req1.RemoteAddr = "10.0.0.1:12345"
+	rr1 := httptest.NewRecorder()
+
+	h.handlePost(rr1, req1)
+
+	if rr1.Code != http.StatusOK {
+		t.Errorf("exempted IP request: expected status %d, got %d", http.StatusOK, rr1.Code)
 	}
 }

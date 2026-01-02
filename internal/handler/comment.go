@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/liskl/flashpaper/internal/model"
 	"github.com/liskl/flashpaper/internal/util"
 )
@@ -22,8 +25,12 @@ import (
 //	  "v": 2
 //	}
 func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[string]interface{}) {
+	ctx, span := h.tracer.Start(r.Context(), "Handler.createComment")
+	defer span.End()
+
 	// Check if discussions are enabled globally
 	if !h.config.Main.Discussion {
+		span.SetStatus(codes.Error, "Discussions disabled")
 		h.jsonError(w, "Discussions are disabled", http.StatusForbidden)
 		return
 	}
@@ -31,35 +38,44 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 	// Get paste ID
 	pasteID, ok := req["pasteid"].(string)
 	if !ok || pasteID == "" {
+		span.SetStatus(codes.Error, "No paste ID provided")
 		h.jsonError(w, "No paste ID provided", http.StatusBadRequest)
 		return
 	}
 
+	span.SetAttributes(attribute.String("flashpaper.paste.id", pasteID))
+
 	// Validate paste ID format
 	if err := util.ValidateIDOrError(pasteID); err != nil {
+		span.SetStatus(codes.Error, "Invalid paste ID")
 		h.jsonError(w, "Invalid paste ID", http.StatusBadRequest)
 		return
 	}
 
 	// Check if paste exists and has discussion enabled
-	paste, err := h.store.ReadPaste(pasteID)
+	paste, err := h.store.ReadPaste(ctx, pasteID)
 	if err != nil {
+		span.RecordError(err)
 		if err == model.ErrPasteNotFound || err == model.ErrPasteExpired {
+			span.SetStatus(codes.Error, "Paste not found")
 			h.jsonError(w, "Paste not found", http.StatusNotFound)
 			return
 		}
+		span.SetStatus(codes.Error, "Failed to read paste")
 		h.jsonError(w, "Failed to read paste", http.StatusInternalServerError)
 		return
 	}
 
 	// Verify discussion is enabled for this paste
 	if !paste.HasDiscussion() {
+		span.SetStatus(codes.Error, "Discussion disabled for paste")
 		h.jsonError(w, "Discussion is disabled for this paste", http.StatusForbidden)
 		return
 	}
 
 	// Cannot comment on burn-after-reading pastes
 	if paste.IsBurnAfterReading() {
+		span.SetStatus(codes.Error, "Cannot comment on burn-after-reading paste")
 		h.jsonError(w, "Cannot comment on burn-after-reading pastes", http.StatusForbidden)
 		return
 	}
@@ -67,6 +83,7 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 	// Get comment data
 	data, ok := req["data"].(string)
 	if !ok || data == "" {
+		span.SetStatus(codes.Error, "No comment data provided")
 		h.jsonError(w, "No comment data provided", http.StatusBadRequest)
 		return
 	}
@@ -79,6 +96,7 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 	} else {
 		// Validate parent ID format
 		if err := util.ValidateIDOrError(parentID); err != nil {
+			span.SetStatus(codes.Error, "Invalid parent ID")
 			h.jsonError(w, "Invalid parent ID", http.StatusBadRequest)
 			return
 		}
@@ -111,6 +129,7 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 
 	// Validate comment
 	if err := comment.Validate(); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		h.jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -120,24 +139,32 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 	for attempts := 0; attempts < 10; attempts++ {
 		commentID, err = util.GenerateID()
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "Failed to generate comment ID")
 			h.jsonError(w, "Failed to generate comment ID", http.StatusInternalServerError)
 			return
 		}
-		if !h.store.CommentExists(pasteID, parentID, commentID) {
+		if !h.store.CommentExists(ctx, pasteID, parentID, commentID) {
 			break
 		}
 	}
 
+	span.SetAttributes(attribute.String("flashpaper.comment.id", commentID))
+
 	// Store comment
-	if err := h.store.CreateComment(pasteID, parentID, commentID, comment); err != nil {
+	if err := h.store.CreateComment(ctx, pasteID, parentID, commentID, comment); err != nil {
+		span.RecordError(err)
 		if err == model.ErrCommentExists {
+			span.SetStatus(codes.Error, "Comment ID collision")
 			h.jsonError(w, "Comment ID collision, please try again", http.StatusConflict)
 			return
 		}
 		if err == model.ErrPasteNotFound {
+			span.SetStatus(codes.Error, "Paste not found")
 			h.jsonError(w, "Paste not found", http.StatusNotFound)
 			return
 		}
+		span.SetStatus(codes.Error, "Failed to store comment")
 		h.jsonError(w, "Failed to store comment", http.StatusInternalServerError)
 		return
 	}
@@ -149,6 +176,7 @@ func (h *Handler) createComment(w http.ResponseWriter, r *http.Request, req map[
 		"postdate": comment.Meta.PostDate,
 	}
 
+	span.SetStatus(codes.Ok, "Comment created")
 	h.jsonSuccess(w, response)
 }
 
@@ -222,6 +250,8 @@ func trimSpace(s string) string {
 // RateLimitMiddleware checks rate limiting for paste/comment creation.
 // This is called before createPaste and createComment.
 func (h *Handler) checkRateLimit(r *http.Request) error {
+	ctx := r.Context()
+
 	// If rate limiting is disabled, allow
 	if h.config.Traffic.Limit <= 0 {
 		return nil
@@ -241,7 +271,7 @@ func (h *Handler) checkRateLimit(r *http.Request) error {
 	ipHash := util.HashIP(clientIP, h.salt)
 
 	// Get last access time
-	lastAccessStr, err := h.store.GetValue("traffic", ipHash)
+	lastAccessStr, err := h.store.GetValue(ctx, "traffic", ipHash)
 	if err != nil {
 		return nil // Allow on error
 	}
@@ -257,7 +287,7 @@ func (h *Handler) checkRateLimit(r *http.Request) error {
 	}
 
 	// Update last access time
-	_ = h.store.SetValue("traffic", ipHash, formatInt(time.Now().Unix()))
+	_ = h.store.SetValue(ctx, "traffic", ipHash, formatInt(time.Now().Unix()))
 
 	return nil
 }

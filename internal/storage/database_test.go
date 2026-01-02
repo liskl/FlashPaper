@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,9 @@ import (
 	"github.com/liskl/flashpaper/internal/config"
 	"github.com/liskl/flashpaper/internal/model"
 )
+
+// testCtx returns a context for testing.
+var testCtx = context.Background()
 
 // skipIfNoCGO skips the test if SQLite is not available (requires CGO)
 func skipIfNoCGO(t *testing.T) {
@@ -53,7 +57,7 @@ func TestNewDatabase_CreatesTables(t *testing.T) {
 	defer db.Close()
 
 	// Verify tables exist by attempting operations
-	assert.False(t, db.PasteExists("nonexistent"))
+	assert.False(t, db.PasteExists(testCtx, "nonexistent"))
 }
 
 func TestDatabase_CreatePaste_Success(t *testing.T) {
@@ -74,11 +78,11 @@ func TestDatabase_CreatePaste_Success(t *testing.T) {
 		},
 	}
 
-	err = db.CreatePaste("f468483c313401e8", paste)
+	err = db.CreatePaste(testCtx, "f468483c313401e8", paste)
 	require.NoError(t, err)
 
 	// Verify paste exists
-	assert.True(t, db.PasteExists("f468483c313401e8"))
+	assert.True(t, db.PasteExists(testCtx, "f468483c313401e8"))
 }
 
 func TestDatabase_CreatePaste_DuplicateID_ReturnsError(t *testing.T) {
@@ -89,11 +93,11 @@ func TestDatabase_CreatePaste_DuplicateID_ReturnsError(t *testing.T) {
 
 	paste := &model.Paste{Data: "content"}
 
-	err = db.CreatePaste("testid", paste)
+	err = db.CreatePaste(testCtx, "testid", paste)
 	require.NoError(t, err)
 
 	// Try to create with same ID
-	err = db.CreatePaste("testid", paste)
+	err = db.CreatePaste(testCtx, "testid", paste)
 	assert.ErrorIs(t, err, model.ErrPasteExists)
 }
 
@@ -116,11 +120,11 @@ func TestDatabase_ReadPaste_Success(t *testing.T) {
 		},
 	}
 
-	err = db.CreatePaste("testpaste", original)
+	err = db.CreatePaste(testCtx, "testpaste", original)
 	require.NoError(t, err)
 
 	// Read it back
-	paste, err := db.ReadPaste("testpaste")
+	paste, err := db.ReadPaste(testCtx, "testpaste")
 	require.NoError(t, err)
 
 	assert.Equal(t, "testpaste", paste.ID)
@@ -136,7 +140,7 @@ func TestDatabase_ReadPaste_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.ReadPaste("nonexistent")
+	_, err = db.ReadPaste(testCtx, "nonexistent")
 	assert.ErrorIs(t, err, model.ErrPasteNotFound)
 }
 
@@ -154,15 +158,15 @@ func TestDatabase_ReadPaste_Expired_DeletesAndReturnsError(t *testing.T) {
 		},
 	}
 
-	err = db.CreatePaste("expired", paste)
+	err = db.CreatePaste(testCtx, "expired", paste)
 	require.NoError(t, err)
 
 	// Try to read it
-	_, err = db.ReadPaste("expired")
+	_, err = db.ReadPaste(testCtx, "expired")
 	assert.ErrorIs(t, err, model.ErrPasteExpired)
 
 	// Verify it was deleted
-	assert.False(t, db.PasteExists("expired"))
+	assert.False(t, db.PasteExists(testCtx, "expired"))
 }
 
 func TestDatabase_DeletePaste_Success(t *testing.T) {
@@ -172,13 +176,13 @@ func TestDatabase_DeletePaste_Success(t *testing.T) {
 	defer db.Close()
 
 	paste := &model.Paste{Data: "content"}
-	err = db.CreatePaste("todelete", paste)
+	err = db.CreatePaste(testCtx, "todelete", paste)
 	require.NoError(t, err)
 
-	err = db.DeletePaste("todelete")
+	err = db.DeletePaste(testCtx, "todelete")
 	require.NoError(t, err)
 
-	assert.False(t, db.PasteExists("todelete"))
+	assert.False(t, db.PasteExists(testCtx, "todelete"))
 }
 
 func TestDatabase_DeletePaste_NotFound(t *testing.T) {
@@ -187,7 +191,7 @@ func TestDatabase_DeletePaste_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	err = db.DeletePaste("nonexistent")
+	err = db.DeletePaste(testCtx, "nonexistent")
 	assert.ErrorIs(t, err, model.ErrPasteNotFound)
 }
 
@@ -202,7 +206,7 @@ func TestDatabase_DeletePaste_DeletesComments(t *testing.T) {
 		Data: "content",
 		Meta: model.PasteMeta{OpenDiscussion: true},
 	}
-	err = db.CreatePaste("withcomments", paste)
+	err = db.CreatePaste(testCtx, "withcomments", paste)
 	require.NoError(t, err)
 
 	// Add comments
@@ -210,15 +214,15 @@ func TestDatabase_DeletePaste_DeletesComments(t *testing.T) {
 		Data: "comment content",
 		Meta: model.CommentMeta{PostDate: time.Now().Unix()},
 	}
-	err = db.CreateComment("withcomments", "", "comment1", comment)
+	err = db.CreateComment(testCtx, "withcomments", "", "comment1", comment)
 	require.NoError(t, err)
 
 	// Delete paste
-	err = db.DeletePaste("withcomments")
+	err = db.DeletePaste(testCtx, "withcomments")
 	require.NoError(t, err)
 
 	// Verify comment is gone too
-	comments, err := db.ReadComments("withcomments")
+	comments, err := db.ReadComments(testCtx, "withcomments")
 	require.NoError(t, err)
 	assert.Empty(t, comments)
 }
@@ -234,7 +238,7 @@ func TestDatabase_CreateComment_Success(t *testing.T) {
 		Data: "content",
 		Meta: model.PasteMeta{OpenDiscussion: true},
 	}
-	err = db.CreatePaste("paste1", paste)
+	err = db.CreatePaste(testCtx, "paste1", paste)
 	require.NoError(t, err)
 
 	// Create comment
@@ -244,10 +248,10 @@ func TestDatabase_CreateComment_Success(t *testing.T) {
 		Version: 2,
 		Meta:    model.CommentMeta{PostDate: time.Now().Unix()},
 	}
-	err = db.CreateComment("paste1", "", "comment1", comment)
+	err = db.CreateComment(testCtx, "paste1", "", "comment1", comment)
 	require.NoError(t, err)
 
-	assert.True(t, db.CommentExists("paste1", "", "comment1"))
+	assert.True(t, db.CommentExists(testCtx, "paste1", "", "comment1"))
 }
 
 func TestDatabase_CreateComment_PasteNotFound(t *testing.T) {
@@ -257,7 +261,7 @@ func TestDatabase_CreateComment_PasteNotFound(t *testing.T) {
 	defer db.Close()
 
 	comment := &model.Comment{Data: "content"}
-	err = db.CreateComment("nonexistent", "", "c1", comment)
+	err = db.CreateComment(testCtx, "nonexistent", "", "c1", comment)
 	assert.ErrorIs(t, err, model.ErrPasteNotFound)
 }
 
@@ -268,15 +272,15 @@ func TestDatabase_CreateComment_DuplicateID(t *testing.T) {
 	defer db.Close()
 
 	paste := &model.Paste{Data: "content", Meta: model.PasteMeta{OpenDiscussion: true}}
-	err = db.CreatePaste("paste1", paste)
+	err = db.CreatePaste(testCtx, "paste1", paste)
 	require.NoError(t, err)
 
 	comment := &model.Comment{Data: "content", Meta: model.CommentMeta{PostDate: time.Now().Unix()}}
-	err = db.CreateComment("paste1", "", "c1", comment)
+	err = db.CreateComment(testCtx, "paste1", "", "c1", comment)
 	require.NoError(t, err)
 
 	// Try duplicate
-	err = db.CreateComment("paste1", "", "c1", comment)
+	err = db.CreateComment(testCtx, "paste1", "", "c1", comment)
 	assert.ErrorIs(t, err, model.ErrCommentExists)
 }
 
@@ -287,7 +291,7 @@ func TestDatabase_ReadComments_Success(t *testing.T) {
 	defer db.Close()
 
 	paste := &model.Paste{Data: "content", Meta: model.PasteMeta{OpenDiscussion: true}}
-	err = db.CreatePaste("paste1", paste)
+	err = db.CreatePaste(testCtx, "paste1", paste)
 	require.NoError(t, err)
 
 	// Add multiple comments
@@ -299,12 +303,12 @@ func TestDatabase_ReadComments_Success(t *testing.T) {
 			Version: 2,
 			Meta:    model.CommentMeta{PostDate: now + int64(i)},
 		}
-		err = db.CreateComment("paste1", "", id, comment)
+		err = db.CreateComment(testCtx, "paste1", "", id, comment)
 		require.NoError(t, err)
 	}
 
 	// Read comments
-	comments, err := db.ReadComments("paste1")
+	comments, err := db.ReadComments(testCtx, "paste1")
 	require.NoError(t, err)
 	require.Len(t, comments, 3)
 
@@ -320,7 +324,7 @@ func TestDatabase_ReadComments_Empty(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	comments, err := db.ReadComments("nonexistent")
+	comments, err := db.ReadComments(testCtx, "nonexistent")
 	require.NoError(t, err)
 	assert.Empty(t, comments)
 }
@@ -331,10 +335,10 @@ func TestDatabase_SetValue_GetValue(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	err = db.SetValue("test", "key1", "value1")
+	err = db.SetValue(testCtx, "test", "key1", "value1")
 	require.NoError(t, err)
 
-	value, err := db.GetValue("test", "key1")
+	value, err := db.GetValue(testCtx, "test", "key1")
 	require.NoError(t, err)
 	assert.Equal(t, "value1", value)
 }
@@ -345,13 +349,13 @@ func TestDatabase_SetValue_Overwrites(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	err = db.SetValue("test", "key1", "original")
+	err = db.SetValue(testCtx, "test", "key1", "original")
 	require.NoError(t, err)
 
-	err = db.SetValue("test", "key1", "updated")
+	err = db.SetValue(testCtx, "test", "key1", "updated")
 	require.NoError(t, err)
 
-	value, err := db.GetValue("test", "key1")
+	value, err := db.GetValue(testCtx, "test", "key1")
 	require.NoError(t, err)
 	assert.Equal(t, "updated", value)
 }
@@ -362,7 +366,7 @@ func TestDatabase_GetValue_NotFound_ReturnsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	value, err := db.GetValue("nonexistent", "key")
+	value, err := db.GetValue(testCtx, "nonexistent", "key")
 	require.NoError(t, err)
 	assert.Empty(t, value)
 }
@@ -381,7 +385,7 @@ func TestDatabase_GetExpiredPastes(t *testing.T) {
 				ExpireDate: time.Now().Add(-time.Duration(i+1) * time.Hour).Unix(),
 			},
 		}
-		err = db.CreatePaste(id, paste)
+		err = db.CreatePaste(testCtx, id, paste)
 		require.NoError(t, err)
 	}
 
@@ -392,10 +396,10 @@ func TestDatabase_GetExpiredPastes(t *testing.T) {
 			ExpireDate: time.Now().Add(time.Hour).Unix(),
 		},
 	}
-	err = db.CreatePaste("notexpired", paste)
+	err = db.CreatePaste(testCtx, "notexpired", paste)
 	require.NoError(t, err)
 
-	expired, err := db.GetExpiredPastes(10)
+	expired, err := db.GetExpiredPastes(testCtx,10)
 	require.NoError(t, err)
 	assert.Len(t, expired, 3)
 	assert.NotContains(t, expired, "notexpired")
@@ -415,17 +419,17 @@ func TestDatabase_Purge(t *testing.T) {
 				ExpireDate: time.Now().Add(-time.Hour).Unix(),
 			},
 		}
-		err = db.CreatePaste(id, paste)
+		err = db.CreatePaste(testCtx, id, paste)
 		require.NoError(t, err)
 	}
 
-	count, err := db.Purge(10)
+	count, err := db.Purge(testCtx, 10)
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
 	// Verify they're gone
-	assert.False(t, db.PasteExists("exp1"))
-	assert.False(t, db.PasteExists("exp2"))
+	assert.False(t, db.PasteExists(testCtx, "exp1"))
+	assert.False(t, db.PasteExists(testCtx, "exp2"))
 }
 
 func TestDatabase_ConcurrentAccess(t *testing.T) {
@@ -436,15 +440,15 @@ func TestDatabase_ConcurrentAccess(t *testing.T) {
 
 	// Create a paste
 	paste := &model.Paste{Data: "content"}
-	err = db.CreatePaste("concurrent", paste)
+	err = db.CreatePaste(testCtx, "concurrent", paste)
 	require.NoError(t, err)
 
 	// Access concurrently
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			_, _ = db.ReadPaste("concurrent")
-			_ = db.PasteExists("concurrent")
+			_, _ = db.ReadPaste(testCtx, "concurrent")
+			_ = db.PasteExists(testCtx, "concurrent")
 			done <- true
 		}()
 	}
@@ -500,22 +504,22 @@ func TestDatabase_SameInterfaceAsFilesystem(t *testing.T) {
 			}
 
 			// Create
-			err := store.CreatePaste("test123", paste)
+			err := store.CreatePaste(testCtx, "test123", paste)
 			require.NoError(t, err)
 
 			// Exists
-			assert.True(t, store.PasteExists("test123"))
+			assert.True(t, store.PasteExists(testCtx, "test123"))
 
 			// Read
-			read, err := store.ReadPaste("test123")
+			read, err := store.ReadPaste(testCtx, "test123")
 			require.NoError(t, err)
 			assert.Equal(t, "test content", read.Data)
 
 			// Delete
-			err = store.DeletePaste("test123")
+			err = store.DeletePaste(testCtx, "test123")
 			require.NoError(t, err)
 
-			assert.False(t, store.PasteExists("test123"))
+			assert.False(t, store.PasteExists(testCtx, "test123"))
 		})
 	}
 }
@@ -560,7 +564,7 @@ func TestDatabase_NoPlaintextInStorage(t *testing.T) {
 	}
 
 	pasteID := "a1b2c3d4e5f67890"
-	err = db.CreatePaste(pasteID, paste)
+	err = db.CreatePaste(testCtx, pasteID, paste)
 	require.NoError(t, err)
 
 	// Also create a comment with "encrypted" content
@@ -570,7 +574,7 @@ func TestDatabase_NoPlaintextInStorage(t *testing.T) {
 		Version: 2,
 		Meta:    model.CommentMeta{PostDate: time.Now().Unix()},
 	}
-	err = db.CreateComment(pasteID, "", "comment123", comment)
+	err = db.CreateComment(testCtx, pasteID, "", "comment123", comment)
 	require.NoError(t, err)
 
 	// Close the database to flush all writes
@@ -656,10 +660,10 @@ func TestDatabase_EncryptedContentRoundTrip(t *testing.T) {
 				},
 			}
 
-			err := db.CreatePaste(pasteID, original)
+			err := db.CreatePaste(testCtx, pasteID, original)
 			require.NoError(t, err)
 
-			retrieved, err := db.ReadPaste(pasteID)
+			retrieved, err := db.ReadPaste(testCtx, pasteID)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.data, retrieved.Data,
@@ -676,28 +680,28 @@ func TestDatabase_PurgeValues(t *testing.T) {
 	defer db.Close()
 
 	// Create some values in different namespaces
-	err = db.SetValue("traffic", "ip1", "1234567890")
+	err = db.SetValue(testCtx, "traffic", "ip1", "1234567890")
 	require.NoError(t, err)
-	err = db.SetValue("traffic", "ip2", "1234567891")
+	err = db.SetValue(testCtx, "traffic", "ip2", "1234567891")
 	require.NoError(t, err)
-	err = db.SetValue("salt", "server", "serversalt")
+	err = db.SetValue(testCtx, "salt", "server", "serversalt")
 	require.NoError(t, err)
 
 	// Purge the traffic namespace (maxAge 0 means purge all)
-	err = db.PurgeValues("traffic", 0)
+	err = db.PurgeValues(testCtx, "traffic", 0)
 	require.NoError(t, err)
 
 	// Traffic values should be gone
-	val, err := db.GetValue("traffic", "ip1")
+	val, err := db.GetValue(testCtx, "traffic", "ip1")
 	require.NoError(t, err)
 	assert.Empty(t, val)
 
-	val, err = db.GetValue("traffic", "ip2")
+	val, err = db.GetValue(testCtx, "traffic", "ip2")
 	require.NoError(t, err)
 	assert.Empty(t, val)
 
 	// Salt value should still exist
-	val, err = db.GetValue("salt", "server")
+	val, err = db.GetValue(testCtx, "salt", "server")
 	require.NoError(t, err)
 	assert.Equal(t, "serversalt", val)
 }
@@ -716,7 +720,7 @@ func TestDatabase_Purge_WithNeverExpire(t *testing.T) {
 			ExpireDate: 0, // Never expires
 		},
 	}
-	err = db.CreatePaste("permanent1", neverExpire)
+	err = db.CreatePaste(testCtx, "permanent1", neverExpire)
 	require.NoError(t, err)
 
 	// Create expired paste
@@ -726,17 +730,17 @@ func TestDatabase_Purge_WithNeverExpire(t *testing.T) {
 			ExpireDate: time.Now().Add(-time.Hour).Unix(),
 		},
 	}
-	err = db.CreatePaste("expired1", expired)
+	err = db.CreatePaste(testCtx, "expired1", expired)
 	require.NoError(t, err)
 
 	// Purge
-	count, err := db.Purge(10)
+	count, err := db.Purge(testCtx,10)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count) // Only expired paste should be purged
 
 	// Verify permanent paste still exists
-	assert.True(t, db.PasteExists("permanent1"))
-	assert.False(t, db.PasteExists("expired1"))
+	assert.True(t, db.PasteExists(testCtx, "permanent1"))
+	assert.False(t, db.PasteExists(testCtx, "expired1"))
 }
 
 // TestDatabase_GetExpiredPastes_WithLimit tests the limit parameter.
@@ -754,12 +758,12 @@ func TestDatabase_GetExpiredPastes_WithLimit(t *testing.T) {
 				ExpireDate: time.Now().Add(-time.Hour).Unix(),
 			},
 		}
-		err = db.CreatePaste("expired"+string(rune('a'+i))+"12345", paste)
+		err = db.CreatePaste(testCtx, "expired"+string(rune('a'+i))+"12345", paste)
 		require.NoError(t, err)
 	}
 
 	// Get with limit
-	expired, err := db.GetExpiredPastes(5)
+	expired, err := db.GetExpiredPastes(testCtx,5)
 	require.NoError(t, err)
 	assert.Len(t, expired, 5)
 }
@@ -773,22 +777,22 @@ func TestDatabase_CommentExists(t *testing.T) {
 
 	// Create paste
 	paste := &model.Paste{Data: "content", Meta: model.PasteMeta{OpenDiscussion: true}}
-	err = db.CreatePaste("paste123", paste)
+	err = db.CreatePaste(testCtx, "paste123", paste)
 	require.NoError(t, err)
 
 	// Comment doesn't exist yet
-	assert.False(t, db.CommentExists("paste123", "", "comment1"))
+	assert.False(t, db.CommentExists(testCtx, "paste123", "", "comment1"))
 
 	// Create comment
 	comment := &model.Comment{Data: "comment", Meta: model.CommentMeta{PostDate: time.Now().Unix()}}
-	err = db.CreateComment("paste123", "", "comment1", comment)
+	err = db.CreateComment(testCtx, "paste123", "", "comment1", comment)
 	require.NoError(t, err)
 
 	// Now it exists
-	assert.True(t, db.CommentExists("paste123", "", "comment1"))
+	assert.True(t, db.CommentExists(testCtx, "paste123", "", "comment1"))
 
 	// Different comment ID doesn't exist
-	assert.False(t, db.CommentExists("paste123", "", "comment2"))
+	assert.False(t, db.CommentExists(testCtx, "paste123", "", "comment2"))
 }
 
 // TestDatabase_ReadPaste_WithAData tests reading paste with AData field.
@@ -810,10 +814,10 @@ func TestDatabase_ReadPaste_WithAData(t *testing.T) {
 		},
 	}
 
-	err = db.CreatePaste("adatatest", original)
+	err = db.CreatePaste(testCtx, "adatatest", original)
 	require.NoError(t, err)
 
-	read, err := db.ReadPaste("adatatest")
+	read, err := db.ReadPaste(testCtx, "adatatest")
 	require.NoError(t, err)
 
 	// Compare as strings to avoid type mismatch between []byte and json.RawMessage
@@ -831,7 +835,7 @@ func TestDatabase_Close(t *testing.T) {
 	require.NoError(t, err)
 
 	// Operations after close should fail
-	_, err = db.ReadPaste("test")
+	_, err = db.ReadPaste(testCtx, "test")
 	assert.Error(t, err)
 }
 
@@ -856,12 +860,12 @@ func TestDatabase_PostgresIntegration(t *testing.T) {
 
 	// Basic smoke test
 	paste := &model.Paste{Data: "test", Version: 2}
-	err = db.CreatePaste("pgtest123", paste)
+	err = db.CreatePaste(testCtx, "pgtest123", paste)
 	require.NoError(t, err)
 
-	_, err = db.ReadPaste("pgtest123")
+	_, err = db.ReadPaste(testCtx, "pgtest123")
 	require.NoError(t, err)
 
-	err = db.DeletePaste("pgtest123")
+	err = db.DeletePaste(testCtx, "pgtest123")
 	require.NoError(t, err)
 }

@@ -13,6 +13,7 @@ FlashPaper is a zero-knowledge encrypted pastebin implementation that ensures th
 5. [API Protocol](#5-api-protocol)
 6. [Security Analysis](#6-security-analysis)
 7. [Threat Model](#7-threat-model)
+8. [Observability](#8-observability)
 
 ---
 
@@ -291,6 +292,94 @@ When enabled, the paste is atomically deleted from storage upon first successful
 - HTTPS enforcement prevents network-level tampering
 - Rate limiting mitigates brute-force attempts
 - Automatic expiration limits exposure window
+
+---
+
+## 8. Observability
+
+FlashPaper implements distributed tracing via OpenTelemetry (OTEL), enabling comprehensive visibility into request flows, performance characteristics, and system behavior in production environments.
+
+### 8.1 Tracing Architecture
+
+The observability layer follows a layered instrumentation approach:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Request Flow with Tracing                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌───────────┐  │
+│  │   Client    │───►│ OTEL HTTP    │───►│   Handler    │───►│  Storage  │  │
+│  │             │    │  Middleware  │    │   (Spans)    │    │  (Spans)  │  │
+│  └─────────────┘    └──────────────┘    └──────────────┘    └───────────┘  │
+│                            │                   │                   │        │
+│                            ▼                   ▼                   ▼        │
+│                     ┌─────────────────────────────────────────────────┐     │
+│                     │              OTLP/gRPC Exporter                 │     │
+│                     │         (Jaeger, Zipkin, OTEL Collector)        │     │
+│                     └─────────────────────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 Instrumentation Points
+
+| Layer | Span Name | Key Attributes |
+|-------|-----------|----------------|
+| HTTP Middleware | `GET /`, `POST /` | `http.method`, `http.route`, `http.status_code`, `http.request.body.size` |
+| Handler - Create | `Handler.createPaste` | `flashpaper.paste.id` |
+| Handler - Read | `Handler.getPaste` | `flashpaper.paste.id` |
+| Handler - Delete | `Handler.deletePaste` | `flashpaper.paste.id` |
+| Handler - Comment | `Handler.createComment` | `flashpaper.paste.id`, `flashpaper.comment.id` |
+| Storage - Create | `Storage.CreatePaste` | `db.system`, `db.operation` |
+| Storage - Read | `Storage.ReadPaste` | `db.system`, `db.operation` |
+| Storage - Delete | `Storage.DeletePaste` | `db.system`, `db.operation` |
+| Storage - Exists | `Storage.PasteExists` | `db.system`, `db.operation` |
+
+### 8.3 Trace Context Propagation
+
+Traces propagate through the system using Go's `context.Context`:
+
+```go
+// Handler creates spans for business logic
+ctx, span := h.tracer.Start(r.Context(), "Handler.createPaste")
+defer span.End()
+
+// Storage layer continues the trace
+ctx, span := s.tracer.Start(ctx, "Storage.CreatePaste")
+defer span.End()
+```
+
+### 8.4 Configuration
+
+OpenTelemetry is configured via INI file or environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FLASHPAPER_OTEL_ENABLED` | Enable/disable tracing | `false` |
+| `FLASHPAPER_OTEL_ENDPOINT` | OTLP gRPC collector endpoint | `localhost:4317` |
+| `FLASHPAPER_OTEL_SERVICENAME` | Service name in traces | `flashpaper` |
+| `FLASHPAPER_OTEL_ENVIRONMENT` | Deployment environment tag | `development` |
+| `FLASHPAPER_OTEL_INSECURE` | Use insecure gRPC (no TLS) | `true` |
+| `FLASHPAPER_OTEL_SAMPLERATE` | Trace sampling rate (0.0-1.0) | `1.0` |
+
+Standard OTEL environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`) are also supported and take precedence.
+
+### 8.5 Resource Attributes
+
+Each trace includes resource attributes identifying the service:
+
+| Attribute | Value |
+|-----------|-------|
+| `service.name` | Configured service name |
+| `service.version` | Application version |
+| `deployment.environment` | Configured environment |
+
+### 8.6 Performance Considerations
+
+- **Sampling:** Production deployments may reduce `samplerate` below 1.0 to minimize overhead
+- **Batching:** The OTLP exporter batches spans before transmission to reduce network calls
+- **Graceful Shutdown:** TracerProvider shutdown flushes pending spans before process termination
 
 ---
 

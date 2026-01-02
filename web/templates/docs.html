@@ -253,6 +253,10 @@
                         <h3>Configuration</h3>
                         <p>Configure storage backends, expiration policies, and security settings.</p>
                     </a>
+                    <a href="#observability" class="doc-card">
+                        <h3>Observability</h3>
+                        <p>OpenTelemetry tracing for monitoring and debugging in production.</p>
+                    </a>
                     <a href="#api" class="doc-card">
                         <h3>API Reference</h3>
                         <p>RESTful API documentation for programmatic paste management.</p>
@@ -268,9 +272,10 @@
                     <ul>
                         <li><a href="#installation">1. Installation</a></li>
                         <li><a href="#configuration">2. Configuration</a></li>
-                        <li><a href="#api">3. API Reference</a></li>
-                        <li><a href="#client-integration">4. Client Integration</a></li>
-                        <li><a href="#troubleshooting">5. Troubleshooting</a></li>
+                        <li><a href="#observability">3. Observability</a></li>
+                        <li><a href="#api">4. API Reference</a></li>
+                        <li><a href="#client-integration">5. Client Integration</a></li>
+                        <li><a href="#troubleshooting">6. Troubleshooting</a></li>
                     </ul>
                 </nav>
 
@@ -432,15 +437,149 @@ limit = 10
 limit = 300
 batchsize = 10</code></pre>
 
+                <!-- Observability Section -->
+                <h2 id="observability">3. Observability</h2>
+
+                <p>
+                    FlashPaper supports OpenTelemetry (OTEL) for distributed tracing, enabling you to monitor
+                    request flows, identify performance bottlenecks, and debug issues in production.
+                </p>
+
+                <h3>3.1 OpenTelemetry Configuration</h3>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_ENABLED</code>
+                        <span>Enable/disable tracing (default: false)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_ENDPOINT</code>
+                        <span>OTLP gRPC collector endpoint (default: "localhost:4317")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_SERVICENAME</code>
+                        <span>Service name in traces (default: "flashpaper")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_ENVIRONMENT</code>
+                        <span>Deployment environment (default: "development")</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_INSECURE</code>
+                        <span>Use insecure gRPC, no TLS (default: true)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>FLASHPAPER_OTEL_SAMPLERATE</code>
+                        <span>Trace sampling rate 0.0-1.0 (default: 1.0)</span>
+                    </div>
+                </div>
+
+                <p>Standard OTEL environment variables are also supported:</p>
+                <div class="config-section">
+                    <div class="env-var">
+                        <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>
+                        <span>OTLP endpoint (overrides FLASHPAPER_OTEL_ENDPOINT)</span>
+                    </div>
+                    <div class="env-var">
+                        <code>OTEL_SERVICE_NAME</code>
+                        <span>Service name (overrides FLASHPAPER_OTEL_SERVICENAME)</span>
+                    </div>
+                </div>
+
+                <h3>3.2 INI Configuration Example</h3>
+                <pre><code>[otel]
+enabled = true
+endpoint = "otel-collector.observability:4317"
+servicename = "flashpaper"
+environment = "production"
+insecure = true
+samplerate = 1.0</code></pre>
+
+                <h3>3.3 Traced Operations</h3>
+                <p>FlashPaper instruments the following operations with distributed tracing:</p>
+                <table class="param-table">
+                    <tr>
+                        <th>Operation</th>
+                        <th>Span Name</th>
+                        <th>Key Attributes</th>
+                    </tr>
+                    <tr>
+                        <td>HTTP Requests</td>
+                        <td><code>GET /</code>, <code>POST /</code></td>
+                        <td><code>http.method</code>, <code>http.route</code>, <code>http.status_code</code></td>
+                    </tr>
+                    <tr>
+                        <td>Create Paste</td>
+                        <td><code>Handler.createPaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Read Paste</td>
+                        <td><code>Handler.getPaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Delete Paste</td>
+                        <td><code>Handler.deletePaste</code></td>
+                        <td><code>flashpaper.paste.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Create Comment</td>
+                        <td><code>Handler.createComment</code></td>
+                        <td><code>flashpaper.paste.id</code>, <code>flashpaper.comment.id</code></td>
+                    </tr>
+                    <tr>
+                        <td>Database Operations</td>
+                        <td><code>Storage.CreatePaste</code>, etc.</td>
+                        <td><code>db.operation</code>, <code>db.system</code></td>
+                    </tr>
+                </table>
+
+                <h3>3.4 Collector Setup</h3>
+                <p>FlashPaper exports traces via OTLP/gRPC. You can use any OpenTelemetry-compatible collector:</p>
+
+                <h4>Jaeger</h4>
+                <pre><code>docker run -d --name jaeger \
+  -p 4317:4317 \
+  -p 16686:16686 \
+  jaegertracing/all-in-one:latest</code></pre>
+
+                <h4>OpenTelemetry Collector</h4>
+                <pre><code># otel-collector-config.yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+exporters:
+  jaeger:
+    endpoint: jaeger:14250
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [jaeger]</code></pre>
+
+                <h3>3.5 Kubernetes Deployment</h3>
+                <p>For Kubernetes deployments, configure OTEL via environment variables:</p>
+                <pre><code>env:
+  - name: FLASHPAPER_OTEL_ENABLED
+    value: "true"
+  - name: FLASHPAPER_OTEL_ENDPOINT
+    value: "otel-collector.observability:4317"
+  - name: FLASHPAPER_OTEL_ENVIRONMENT
+    value: "production"</code></pre>
+
                 <!-- API Reference Section -->
-                <h2 id="api">3. API Reference</h2>
+                <h2 id="api">4. API Reference</h2>
 
                 <p>
                     FlashPaper implements a PrivateBin-compatible REST API. All responses use JSON format
                     with a <code>status</code> field (0 = success, 1 = error).
                 </p>
 
-                <h3>3.1 Create Paste</h3>
+                <h3>4.1 Create Paste</h3>
                 <div class="endpoint">
                     <div class="endpoint-header">
                         <span class="endpoint-method method-post">POST</span>
@@ -522,7 +661,7 @@ batchsize = 10</code></pre>
                     </div>
                 </div>
 
-                <h3>3.2 Retrieve Paste</h3>
+                <h3>4.2 Retrieve Paste</h3>
                 <div class="endpoint">
                     <div class="endpoint-header">
                         <span class="endpoint-method method-get">GET</span>
@@ -562,7 +701,7 @@ batchsize = 10</code></pre>
                     </div>
                 </div>
 
-                <h3>3.3 Delete Paste</h3>
+                <h3>4.3 Delete Paste</h3>
                 <div class="endpoint">
                     <div class="endpoint-header">
                         <span class="endpoint-method method-delete">DELETE</span>
@@ -604,7 +743,7 @@ batchsize = 10</code></pre>
                     </div>
                 </div>
 
-                <h3>3.4 Health Check</h3>
+                <h3>4.4 Health Check</h3>
                 <div class="endpoint">
                     <div class="endpoint-header">
                         <span class="endpoint-method method-get">GET</span>
@@ -617,7 +756,7 @@ batchsize = 10</code></pre>
                     </div>
                 </div>
 
-                <h3>3.5 Error Responses</h3>
+                <h3>4.5 Error Responses</h3>
                 <p>All error responses follow this format:</p>
                 <pre><code>{
   "status": 1,
@@ -653,9 +792,9 @@ batchsize = 10</code></pre>
                 </table>
 
                 <!-- Client Integration Section -->
-                <h2 id="client-integration">4. Client Integration</h2>
+                <h2 id="client-integration">5. Client Integration</h2>
 
-                <h3>4.1 Encryption Requirements</h3>
+                <h3>5.1 Encryption Requirements</h3>
                 <p>
                     Clients must implement client-side encryption before sending data to the API.
                     See the <a href="/implementation">Implementation Details</a> for cryptographic specifications.
@@ -666,14 +805,14 @@ batchsize = 10</code></pre>
                     and decryption must occur client-side using the key stored in the URL fragment.
                 </div>
 
-                <h3>4.2 URL Structure</h3>
+                <h3>5.2 URL Structure</h3>
                 <pre><code>https://example.com/?{pasteId}#{key}
                     │           │         │
                     │           │         └── Base58-encoded encryption key (never sent to server)
                     │           └── 16-character hex paste ID
                     └── Server origin</code></pre>
 
-                <h3>4.3 AData Structure</h3>
+                <h3>5.3 AData Structure</h3>
                 <p>The <code>adata</code> array contains encryption parameters and paste settings:</p>
                 <pre><code>[
   [
@@ -692,9 +831,9 @@ batchsize = 10</code></pre>
 ]</code></pre>
 
                 <!-- Troubleshooting Section -->
-                <h2 id="troubleshooting">5. Troubleshooting</h2>
+                <h2 id="troubleshooting">6. Troubleshooting</h2>
 
-                <h3>5.1 Common Issues</h3>
+                <h3>6.1 Common Issues</h3>
 
                 <h4>Database Connection Errors</h4>
                 <ul>
@@ -718,11 +857,11 @@ batchsize = 10</code></pre>
                     <li>Ensure the data volume has correct permissions</li>
                 </ul>
 
-                <h3>5.2 Debug Mode</h3>
+                <h3>6.2 Debug Mode</h3>
                 <p>Enable verbose logging by checking container logs:</p>
                 <pre><code>docker-compose logs -f flashpaper</code></pre>
 
-                <h3>5.3 Getting Help</h3>
+                <h3>6.3 Getting Help</h3>
                 <ul>
                     <li>GitHub Issues: <a href="https://github.com/liskl/flashpaper/issues" target="_blank">Report bugs or request features</a></li>
                     <li>Source Code: <a href="https://github.com/liskl/flashpaper" target="_blank">View the source</a></li>

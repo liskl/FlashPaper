@@ -29,6 +29,7 @@ type Config struct {
 	Traffic TrafficConfig
 	Purge   PurgeConfig
 	Model   ModelConfig
+	Otel    OtelConfig
 }
 
 // MainConfig contains core application settings.
@@ -136,6 +137,27 @@ type ModelConfig struct {
 	Dir string // Directory path for paste storage
 }
 
+// OtelConfig contains OpenTelemetry tracing configuration.
+type OtelConfig struct {
+	// Enabled enables or disables OpenTelemetry tracing
+	Enabled bool
+
+	// Endpoint is the OTLP gRPC collector endpoint (e.g., "localhost:4317")
+	Endpoint string
+
+	// ServiceName is the service name reported in traces
+	ServiceName string
+
+	// Environment is the deployment environment (development, staging, production)
+	Environment string
+
+	// Insecure uses insecure gRPC connection (no TLS)
+	Insecure bool
+
+	// SampleRate is the trace sampling rate (0.0-1.0, where 1.0 = 100%)
+	SampleRate float64
+}
+
 // DefaultConfig returns a Config with sensible defaults matching PrivateBin.
 // These defaults provide a secure, functional starting point.
 func DefaultConfig() *Config {
@@ -187,6 +209,14 @@ func DefaultConfig() *Config {
 			Driver: "sqlite3",
 			DSN:    "flashpaper.db",
 			Dir:    "data",
+		},
+		Otel: OtelConfig{
+			Enabled:     false,
+			Endpoint:    "localhost:4317",
+			ServiceName: "flashpaper",
+			Environment: "development",
+			Insecure:    true,
+			SampleRate:  1.0,
 		},
 	}
 }
@@ -297,6 +327,16 @@ func (c *Config) loadFromFile(path string) error {
 		c.Model.Dir = sec.Key("dir").MustString(c.Model.Dir)
 	}
 
+	// [otel] section
+	if sec, err := iniFile.GetSection("otel"); err == nil {
+		c.Otel.Enabled = sec.Key("enabled").MustBool(c.Otel.Enabled)
+		c.Otel.Endpoint = sec.Key("endpoint").MustString(c.Otel.Endpoint)
+		c.Otel.ServiceName = sec.Key("servicename").MustString(c.Otel.ServiceName)
+		c.Otel.Environment = sec.Key("environment").MustString(c.Otel.Environment)
+		c.Otel.Insecure = sec.Key("insecure").MustBool(c.Otel.Insecure)
+		c.Otel.SampleRate = sec.Key("samplerate").MustFloat64(c.Otel.SampleRate)
+	}
+
 	return nil
 }
 
@@ -359,6 +399,38 @@ func (c *Config) loadFromEnv() {
 	if v := os.Getenv("FLASHPAPER_PURGE_LIMIT"); v != "" {
 		if limit, err := strconv.Atoi(v); err == nil {
 			c.Purge.Limit = limit
+		}
+	}
+
+	// Otel section - supports both standard OTEL env vars and FLASHPAPER_ prefix
+	// Standard OTEL environment variables (takes precedence for interoperability)
+	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
+		c.Otel.Enabled = true
+		c.Otel.Endpoint = v
+	}
+	if v := os.Getenv("OTEL_SERVICE_NAME"); v != "" {
+		c.Otel.ServiceName = v
+	}
+
+	// FlashPaper-specific OTEL environment variables
+	if v := os.Getenv("FLASHPAPER_OTEL_ENABLED"); v != "" {
+		c.Otel.Enabled = parseBool(v)
+	}
+	if v := os.Getenv("FLASHPAPER_OTEL_ENDPOINT"); v != "" {
+		c.Otel.Endpoint = v
+	}
+	if v := os.Getenv("FLASHPAPER_OTEL_SERVICENAME"); v != "" {
+		c.Otel.ServiceName = v
+	}
+	if v := os.Getenv("FLASHPAPER_OTEL_ENVIRONMENT"); v != "" {
+		c.Otel.Environment = v
+	}
+	if v := os.Getenv("FLASHPAPER_OTEL_INSECURE"); v != "" {
+		c.Otel.Insecure = parseBool(v)
+	}
+	if v := os.Getenv("FLASHPAPER_OTEL_SAMPLERATE"); v != "" {
+		if rate, err := strconv.ParseFloat(v, 64); err == nil {
+			c.Otel.SampleRate = rate
 		}
 	}
 }
@@ -459,4 +531,11 @@ func (c *Config) GetExpireDuration(option string) time.Duration {
 		return d
 	}
 	return 0
+}
+
+// parseBool parses a string as a boolean value.
+// Accepts "true", "1", "yes", "on" as true (case-insensitive).
+func parseBool(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return s == "true" || s == "1" || s == "yes" || s == "on"
 }

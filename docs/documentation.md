@@ -6,9 +6,10 @@ Welcome to the FlashPaper documentation. This guide covers installation, configu
 
 1. [Installation](#1-installation)
 2. [Configuration](#2-configuration)
-3. [API Reference](#3-api-reference)
-4. [Client Integration](#4-client-integration)
-5. [Troubleshooting](#5-troubleshooting)
+3. [Observability](#3-observability)
+4. [API Reference](#4-api-reference)
+5. [Client Integration](#5-client-integration)
+6. [Troubleshooting](#6-troubleshooting)
 
 ---
 
@@ -154,11 +155,106 @@ batchsize = 10
 
 ---
 
-## 3. API Reference
+## 3. Observability
+
+FlashPaper supports OpenTelemetry (OTEL) for distributed tracing, enabling you to monitor request flows, identify performance bottlenecks, and debug issues in production.
+
+### 3.1 OpenTelemetry Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FLASHPAPER_OTEL_ENABLED` | Enable/disable tracing | false |
+| `FLASHPAPER_OTEL_ENDPOINT` | OTLP gRPC collector endpoint | "localhost:4317" |
+| `FLASHPAPER_OTEL_SERVICENAME` | Service name in traces | "flashpaper" |
+| `FLASHPAPER_OTEL_ENVIRONMENT` | Deployment environment | "development" |
+| `FLASHPAPER_OTEL_INSECURE` | Use insecure gRPC (no TLS) | true |
+| `FLASHPAPER_OTEL_SAMPLERATE` | Trace sampling rate (0.0-1.0) | 1.0 |
+
+Standard OTEL environment variables are also supported:
+
+| Variable | Description |
+|----------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint (overrides FLASHPAPER_OTEL_ENDPOINT) |
+| `OTEL_SERVICE_NAME` | Service name (overrides FLASHPAPER_OTEL_SERVICENAME) |
+
+### 3.2 INI Configuration Example
+
+```ini
+[otel]
+enabled = true
+endpoint = "otel-collector.observability:4317"
+servicename = "flashpaper"
+environment = "production"
+insecure = true
+samplerate = 1.0
+```
+
+### 3.3 Traced Operations
+
+FlashPaper instruments the following operations with distributed tracing:
+
+| Operation | Span Name | Key Attributes |
+|-----------|-----------|----------------|
+| HTTP Requests | `GET /`, `POST /` | `http.method`, `http.route`, `http.status_code` |
+| Create Paste | `Handler.createPaste` | `flashpaper.paste.id` |
+| Read Paste | `Handler.getPaste` | `flashpaper.paste.id` |
+| Delete Paste | `Handler.deletePaste` | `flashpaper.paste.id` |
+| Create Comment | `Handler.createComment` | `flashpaper.paste.id`, `flashpaper.comment.id` |
+| Database Operations | `Storage.CreatePaste`, etc. | `db.operation`, `db.system` |
+
+### 3.4 Collector Setup
+
+FlashPaper exports traces via OTLP/gRPC. You can use any OpenTelemetry-compatible collector:
+
+**Jaeger:**
+```bash
+docker run -d --name jaeger \
+  -p 4317:4317 \
+  -p 16686:16686 \
+  jaegertracing/all-in-one:latest
+```
+
+**OpenTelemetry Collector:**
+```yaml
+# otel-collector-config.yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+exporters:
+  jaeger:
+    endpoint: jaeger:14250
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [jaeger]
+```
+
+### 3.5 Kubernetes Deployment
+
+For Kubernetes deployments, configure OTEL via environment variables:
+
+```yaml
+env:
+  - name: FLASHPAPER_OTEL_ENABLED
+    value: "true"
+  - name: FLASHPAPER_OTEL_ENDPOINT
+    value: "otel-collector.observability:4317"
+  - name: FLASHPAPER_OTEL_ENVIRONMENT
+    value: "production"
+```
+
+---
+
+## 4. API Reference
 
 FlashPaper implements a PrivateBin-compatible REST API. All responses use JSON format with a `status` field (0 = success, 1 = error).
 
-### 3.1 Create Paste
+### 4.1 Create Paste
 
 **POST /**
 
@@ -209,7 +305,7 @@ Create a new encrypted paste.
 }
 ```
 
-### 3.2 Retrieve Paste
+### 4.2 Retrieve Paste
 
 **GET /?{pasteId}**
 
@@ -239,7 +335,7 @@ Retrieve an encrypted paste by ID.
 }
 ```
 
-### 3.3 Delete Paste
+### 4.3 Delete Paste
 
 **DELETE /**
 
@@ -270,7 +366,7 @@ Delete a paste using its delete token.
 }
 ```
 
-### 3.4 Health Check
+### 4.4 Health Check
 
 **GET /health**
 
@@ -282,7 +378,7 @@ Returns service health status.
 {"status": "ok"}
 ```
 
-### 3.5 Error Responses
+### 4.5 Error Responses
 
 All error responses follow this format:
 
@@ -302,15 +398,15 @@ All error responses follow this format:
 
 ---
 
-## 4. Client Integration
+## 5. Client Integration
 
-### 4.1 Encryption Requirements
+### 5.1 Encryption Requirements
 
 Clients must implement client-side encryption before sending data to the API. See the [Implementation Details](implementation.md) for cryptographic specifications.
 
 > **Key Point:** The server never receives plaintext data. All encryption and decryption must occur client-side using the key stored in the URL fragment.
 
-### 4.2 URL Structure
+### 5.2 URL Structure
 
 ```
 https://example.com/?{pasteId}#{key}
@@ -320,7 +416,7 @@ https://example.com/?{pasteId}#{key}
         └── Server origin
 ```
 
-### 4.3 AData Structure
+### 5.3 AData Structure
 
 The `adata` array contains encryption parameters and paste settings:
 
@@ -344,9 +440,9 @@ The `adata` array contains encryption parameters and paste settings:
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
-### 5.1 Common Issues
+### 6.1 Common Issues
 
 #### Database Connection Errors
 
@@ -367,7 +463,7 @@ The `adata` array contains encryption parameters and paste settings:
 - Verify environment variables are correctly formatted
 - Ensure the data volume has correct permissions
 
-### 5.2 Debug Mode
+### 6.2 Debug Mode
 
 Enable verbose logging by checking container logs:
 
@@ -375,7 +471,7 @@ Enable verbose logging by checking container logs:
 docker-compose logs -f flashpaper
 ```
 
-### 5.3 Getting Help
+### 6.3 Getting Help
 
 - **GitHub Issues:** [Report bugs or request features](https://github.com/liskl/flashpaper/issues)
 - **Source Code:** [View the source](https://github.com/liskl/flashpaper)
